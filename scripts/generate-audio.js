@@ -49,10 +49,11 @@ const WORDS = [
   'apple', 'river', 'bridge', 'inside', 'outside', 'car', 'van', 'bike', 'cycle', 'bird', 'garden', 'cloud',
 ];
 
-// 0.7 = slowest ElevenLabs allows, well suited to a young child hearing a
-// word for the first time. Override with --speed=<0.7-1.2> if needed.
+// 0.85 = confirmed good pace for a young child hearing a word for the
+// first time (slower than ElevenLabs' 1.0 default). Override with
+// --speed=<0.7-1.2> if needed.
 const speedArg = args.find(a => a.startsWith('--speed='));
-const SPEED = speedArg ? parseFloat(speedArg.split('=')[1]) : 0.75;
+const SPEED = speedArg ? parseFloat(speedArg.split('=')[1]) : 0.85;
 const onlyArg = args.find(a => a.startsWith('--only='));
 const ONLY = onlyArg ? onlyArg.split('=')[1].split(',').map(w => w.trim().toLowerCase()) : null;
 
@@ -61,7 +62,10 @@ function requestTTS(word) {
     const body = JSON.stringify({
       text: word,
       model_id: MODEL_ID,
-      voice_settings: { stability: 0.6, similarity_boost: 0.8, style: 0.3, use_speaker_boost: true, speed: SPEED },
+      // Lower style (less expressive variance) + higher stability = more
+      // consistent, clearly-enunciated single-word delivery; speaker boost
+      // for extra clarity/loudness.
+      voice_settings: { stability: 0.75, similarity_boost: 0.8, style: 0.15, use_speaker_boost: true, speed: SPEED },
     });
     const options = {
       hostname: 'api.elevenlabs.io',
