@@ -208,6 +208,51 @@ const Illustrations = (() => {
       el('rect', { x: 28, y: 44, width: 64, height: 40, fill: '#DC2626' }),
       el('ellipse', { cx: 60, cy: 84, rx: 32, ry: 12, fill: '#B91C1C' }),
     ]),
+    ring: () => svgWrap([
+      el('circle', { cx: 60, cy: 68, r: 26, fill: 'none', stroke: C.sun, 'stroke-width': 10 }),
+      el('path', { d: 'M60 30 L50 44 L70 44 Z', fill: C.blue }),
+      el('circle', { cx: 60, cy: 38, r: 6, fill: '#93C5FD' }),
+    ]),
+    pink: () => svgWrap([el('circle', { cx: 60, cy: 60, r: 40, fill: C.pink })]),
+    gift: () => svgWrap([
+      el('rect', { x: 26, y: 52, width: 68, height: 46, fill: C.red }),
+      el('rect', { x: 26, y: 52, width: 68, height: 14, fill: '#DC2626' }),
+      el('rect', { x: 54, y: 52, width: 12, height: 46, fill: C.sun }),
+      el('path', { d: 'M60 52 Q44 32 34 44 Q34 52 48 52 Z', fill: C.sun }),
+      el('path', { d: 'M60 52 Q76 32 86 44 Q86 52 72 52 Z', fill: C.sun }),
+    ]),
+    corn: () => svgWrap([
+      el('path', { d: 'M60 20 C40 20 34 46 40 76 C44 96 76 96 80 76 C86 46 80 20 60 20 Z', fill: C.sun }),
+      ...[38, 50, 62, 74, 86].map(y => el('circle', { cx: 46, cy: y - 8, r: 3.5, fill: '#EAB308' })),
+      ...[38, 50, 62, 74, 86].map(y => el('circle', { cx: 60, cy: y - 4, r: 3.5, fill: '#EAB308' })),
+      ...[38, 50, 62, 74, 86].map(y => el('circle', { cx: 74, cy: y - 8, r: 3.5, fill: '#EAB308' })),
+      el('path', { d: 'M48 22 Q60 6 72 22', fill: C.green }),
+    ]),
+    long: () => svgWrap([
+      el('rect', { x: 14, y: 54, width: 92, height: 12, rx: 6, fill: C.blue }),
+      el('rect', { x: 14, y: 54, width: 20, height: 12, rx: 6, fill: C.coral }),
+    ]),
+    pond: () => svgWrap([
+      el('ellipse', { cx: 60, cy: 68, rx: 44, ry: 26, fill: C.blue }),
+      el('ellipse', { cx: 44, cy: 60, rx: 8, ry: 5, fill: '#93C5FD' }),
+      el('path', { d: 'M30 44 Q36 34 44 38', stroke: C.green, 'stroke-width': 4, fill: 'none', 'stroke-linecap': 'round' }),
+      el('path', { d: 'M84 46 Q90 36 98 40', stroke: C.green, 'stroke-width': 4, fill: 'none', 'stroke-linecap': 'round' }),
+    ]),
+    circle: () => svgWrap([el('circle', { cx: 60, cy: 60, r: 40, fill: 'none', stroke: C.violet, 'stroke-width': 10 })]),
+    fifteen: () => textIcon('15'),
+    eighteen: () => textIcon('18'),
+    twenty: () => textIcon('20'),
+    nose: () => svgWrap([
+      el('circle', { cx: 60, cy: 40, r: 30, fill: C.tan }),
+      el('path', { d: 'M52 60 Q50 78 60 82 Q70 78 68 60', fill: C.tan, stroke: '#D97706', 'stroke-width': 2 }),
+      el('circle', { cx: 55, cy: 76, r: 3, fill: '#92400E' }),
+      el('circle', { cx: 65, cy: 76, r: 3, fill: '#92400E' }),
+    ]),
+    tongue: () => svgWrap([
+      el('path', { d: 'M34 30 H86 V56 Q86 96 60 96 Q34 96 34 56 Z', fill: C.pink }),
+      el('path', { d: 'M60 56 V90', stroke: '#F472B6', 'stroke-width': 3 }),
+      el('rect', { x: 34, y: 30, width: 52, height: 14, fill: C.white, stroke: C.gray, 'stroke-width': 2 }),
+    ]),
   };
 
   function textIcon(label) {

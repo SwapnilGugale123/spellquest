@@ -2,6 +2,9 @@
 (() => {
   'use strict';
 
+  // How long a passed test/level celebration lingers before auto-advancing.
+  const AUTO_ADVANCE_DELAY = 2200;
+
   /* ---------- tiny DOM builder ---------- */
   function E(tag, attrs, children) {
     const e = document.createElement(tag);
@@ -76,9 +79,9 @@
         vehicles: [1, 2, 3, 4].map(i => Rewards.vehicleForUnit(i)),
         words: [
           ...words(1, ['Cat', 'Dog', 'Sun', 'Red', 'Box', 'Egg', 'Ball', 'Fish', 'Milk', 'Star', 'Rain', 'Tree'], 101),
-          ...words(2, ['Blue', 'Green', 'White', 'Black', 'Yellow', 'Girl', 'Boy', 'Father', 'Mother', 'Water', 'Tea', 'Coffee'], 201),
-          ...words(3, ['Inside', 'Outside', 'Car', 'Van', 'Bike', 'Cycle', 'Bird', 'Curd', 'Bulb', 'Under', 'Garden', 'Cloud'], 301),
-          ...words(4, ['Apple', 'River', 'Bridge', 'Drum', 'Oval', 'Thirty'], 401),
+          ...words(2, ['Ring', 'Pink', 'Gift', 'Corn', 'Long', 'Pond', 'Circle', 'Fifteen', 'Eighteen', 'Twenty', 'Nose', 'Tongue'], 201),
+          ...words(3, ['Blue', 'Green', 'White', 'Thirty', 'Oval', 'Curd', 'Drum', 'Girl', 'Pune', 'Black', 'Bulb', 'Under'], 301),
+          ...words(4, ['Apple', 'River', 'Bridge', 'Inside', 'Outside', 'Car', 'Van', 'Bike', 'Cycle', 'Bird', 'Garden', 'Cloud'], 401),
         ],
         level_progress: [], word_stats: [], test_log: [],
         rewards: [
@@ -276,6 +279,13 @@
       this.persist();
       this.setState({ testResult: { score, correct, total, missed, tier }, screen: 'testcomplete' });
       if (tier !== 'low') { this.bigConfetti(); Audio2.tone('win', this.state.muted); }
+      // Passed (80-100%): no tap needed, move on to the next test by itself
+      // after a moment to enjoy the celebration. 60-79%/below-60% still need
+      // a tap since they're a real choice (retry tricky words vs continue,
+      // or restart the whole test) — see A.5.
+      if (tier === 'hi') {
+        setTimeout(() => { if (this.state.screen === 'testcomplete') this.testContinue(); }, AUTO_ADVANCE_DELAY);
+      }
     },
 
     testContinue() { this.setState({ testResult: null }); this.nextTest(); },
@@ -294,8 +304,15 @@
         if (nu) nu.is_unlocked = 1;
       }
       this.persist();
-      this.setState({ screen: unitDone ? 'unitcomplete' : 'levelcomplete' });
+      const nextScreen = unitDone ? 'unitcomplete' : 'levelcomplete';
+      this.setState({ screen: nextScreen });
       this.bigConfetti(); Audio2.tone('win', this.state.muted);
+      // Level passed: automatically move into the next level's first test.
+      // A completed unit still stops here — the child should linger on the
+      // finished vehicle/Garage moment rather than being swept into Unit+1.
+      if (!unitDone) {
+        setTimeout(() => { if (this.state.screen === 'levelcomplete') this.startLevel(unitId, level + 1); }, AUTO_ADVANCE_DELAY);
+      }
     },
 
     toggleMute() { const m = !this.state.muted; Model.data.settings.muted = m ? 1 : 0; this.persist(); this.setState({ muted: m }); },
@@ -577,7 +594,9 @@
   }
 
   function viewTestComplete() {
-    const r = App.state.testResult; const pct = Math.round(r.score * 100);
+    const r = App.state.testResult;
+    if (!r) return E('div'); // mid-transition to the next test; next render() has the real screen
+    const pct = Math.round(r.score * 100);
     const cfg = r.tier === 'hi' ? { title: 'Fantastic! Great job!', color: 'var(--green)', sub: 'You nailed it!' }
       : r.tier === 'mid' ? { title: 'Great job!', color: 'var(--blue)', sub: 'A few tricky ones left.' }
       : { title: 'Almost there!', color: 'var(--amber-dk)', sub: 'Let’s try that again.' };
@@ -601,12 +620,13 @@
 
   function viewLevelComplete() {
     const u = Model.unit(App.state.unitId); const veh = Model.vehicleOf(u.id); const rw = Model.reward(u.id);
+    const level = App.state.level;
     return E('div', { class: 'lc-wrap' }, [
       E('div', { class: 'lc-title baloo' }, ['New part unlocked!']),
       E('div', { class: 'lc-card' }, [vehicleBox(veh.type, rw.parts_unlocked, veh.color, { width: '220px' })]),
       E('div', { class: 'lc-caption' }, ['You’ve built ' + rw.parts_unlocked + ' of 6 parts!']),
       E('div', { class: 'lc-body' }, ['Keep going to finish your ' + veh.name + '.']),
-      bigBtn('Continue', () => App.setState({ screen: 'levelpath' }), { bg: 'var(--green)', style: { marginTop: '8px', minWidth: '200px' } }),
+      bigBtn('Continue', () => App.startLevel(u.id, level + 1), { bg: 'var(--green)', style: { marginTop: '8px', minWidth: '200px' } }),
     ]);
   }
 
