@@ -3,45 +3,33 @@
 A gamified, offline spelling app. See `uploads/SpellQuest_Design_and_Build_Specification.md`
 (one level up, in the parent Word Game folder) for the full design spec.
 
+**Live app:** https://swapnilgugale123.github.io/spellquest/index.html
+**Parent Admin:** https://swapnilgugale123.github.io/spellquest/admin.html
+
 ## Installing it (do this once per device)
 
-SpellQuest is a PWA (installable web app) — installed once, it runs fully
-offline afterward like a normal app icon, no server or Wi-Fi required to play.
+SpellQuest is a PWA (installable web app). Visit the link above once on a
+device, install it, and from then on it runs fully offline from a home-screen
+icon — no Wi-Fi, no laptop, nothing running in the background.
 
-**Step 1 — get it onto the device the first time.** You need to open it over
-`http://`/`https://` at least once (never as a double-clicked file — phone
-and desktop browsers both block the local file access this app needs when
-opened that way). The simplest way, with everything staying local to your
-home network:
+1. Open the live app link above in the device's browser.
+2. Install it:
+   - **Android (Chrome):** tap the ⋮ menu → "Add to Home screen" / "Install app".
+   - **iPhone (Safari):** tap the Share icon → "Add to Home Screen".
+   - **Laptop (Chrome/Edge):** click the install icon (⊕) in the address bar.
+3. Open it from the new home-screen/desktop icon from now on — internet is
+   only needed again if you want to pick up a future update to the app itself.
 
-1. On the parent's laptop, from this folder, run:
-   ```
-   python -m http.server 8080
-   ```
-2. On the SAME Wi-Fi, open `http://<laptop's-local-IP>:8080/index.html` on
-   the phone (find the laptop's IP with `ipconfig`, e.g. `192.168.1.23`).
-
-**Step 2 — install it on that device.**
-- **Android (Chrome):** tap the ⋮ menu → "Add to Home screen" / "Install app".
-- **iPhone (Safari):** tap the Share icon → "Add to Home Screen".
-- **Laptop (Chrome/Edge):** click the install icon (⊕) in the address bar.
-
-Once installed, the laptop's server is no longer needed — the icon on the
-home screen opens SpellQuest standalone, fully offline, anytime. Repeat
-steps 1–2 once for each device (each phone, the laptop, etc.) — after that,
-each device is independent.
-
-For Parent Admin, install `admin.html` the same way, or just reach it from
-the "Parent" tab inside the main app.
+Repeat once per device (each phone, the laptop, etc.) — after install, each
+device runs completely independently and offline.
 
 ## How progress is stored (important)
 
 Each installed device keeps its OWN progress automatically (saved
-continuously, no action needed) — this is what makes it work fully offline.
-That also means progress does **not** automatically appear on a different
-device. To move progress between devices (e.g. son played on his phone,
-now wants to continue on the laptop), use **Parent Admin → "Move progress
-to another device"**:
+continuously, no action needed). That also means progress does **not**
+automatically appear on a different device. To move progress between devices
+(e.g. son played on his phone, now wants to continue on the laptop), use
+**Parent Admin → "Move progress to another device"**:
 
 1. On the device with the progress you want to keep: tap **Export
    progress** — this downloads a `spellquest.sqlite` file.
@@ -53,11 +41,6 @@ to another device"**:
 
 This is a manual, explicit step by design — it only lives in Parent Admin,
 not the child-facing screens, so nothing gets overwritten by accident.
-
-(Desktop Chrome/Edge only: "Grant folder access" under Advanced makes that
-device auto-write straight into `data/spellquest.sqlite` on every save,
-skipping the manual Export step on that device specifically — Import on
-other devices still works the same way.)
 
 ## Folder layout
 
@@ -89,7 +72,15 @@ automatically, with zero code changes.
 ## Updating the app itself (code changes, not progress)
 
 Because the service worker caches everything for offline use, a device that
-already installed SpellQuest won't see code changes until it's back online
-at least briefly — reopen the app while connected to Wi-Fi/internet-reachable
-to the laptop server and it'll pick up the update in the background (may
-need one extra reopen to fully switch over).
+already installed SpellQuest won't see code/content changes (new words,
+bug fixes, etc.) until it's back online at least briefly — reopen the
+installed app while the device has internet and it'll pick up the update in
+the background (may need one extra reopen to fully switch over). Player
+progress is untouched by this — it lives separately in local storage.
+
+## Publishing updates (for whoever maintains the code)
+
+This folder is a git repo pushed to
+https://github.com/SwapnilGugale123/spellquest, served live via GitHub
+Pages. To publish a change: commit it, then `git push`. GitHub Pages
+rebuilds automatically within a minute or two.
