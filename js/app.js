@@ -572,7 +572,7 @@
     const showWord = App.state.level <= 2;
     return E('div', { style: { flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' } }, [
       E('div', { class: 'game-top' }, [
-        E('button', { class: 'icon-btn', onclick: () => App.togglePause() }, [icon('pause', { size: 20 })]),
+        E('button', { class: 'icon-btn', onclick: () => App.togglePause() }, [icon('back', { size: 22 })]),
         E('div', { class: 'game-progress-track' }, [E('div', { class: 'game-progress-fill', style: { width: progW + '%' } })]),
         iconBtn(App.state.muted ? 'mute' : 'sound', () => App.toggleMute()),
       ]),
