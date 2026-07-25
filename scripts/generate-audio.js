@@ -5,8 +5,11 @@
 //
 // Usage:
 //   ELEVENLABS_API_KEY=xxxx node scripts/generate-audio.js
-//   node scripts/generate-audio.js --force        (regenerate everything)
-//   node scripts/generate-audio.js --voice=<id>    (use a specific voice)
+//   node scripts/generate-audio.js --force              (regenerate everything)
+//   node scripts/generate-audio.js --voice=<id>          (use a specific voice)
+//   node scripts/generate-audio.js --speed=0.7           (0.7-1.2, default 0.75)
+//   node scripts/generate-audio.js --voice=<id> --only=cat
+//                                                         (preview just one word)
 //
 // The API key is read from the ELEVENLABS_API_KEY environment variable —
 // never hardcode it in this file or pass it on the command line where it
@@ -26,7 +29,8 @@ if (!API_KEY) {
 }
 
 const args = process.argv.slice(2);
-const FORCE = args.includes('--force');
+const onlyArgForForce = args.find(a => a.startsWith('--only='));
+const FORCE = args.includes('--force') || !!onlyArgForForce; // previewing one word should always regenerate it
 const voiceArg = args.find(a => a.startsWith('--voice='));
 // "Alice — Clear, Engaging Educator": a premade voice available on the
 // free API tier, and well suited to a child-facing pronunciation app.
@@ -45,12 +49,19 @@ const WORDS = [
   'apple', 'river', 'bridge', 'inside', 'outside', 'car', 'van', 'bike', 'cycle', 'bird', 'garden', 'cloud',
 ];
 
+// 0.7 = slowest ElevenLabs allows, well suited to a young child hearing a
+// word for the first time. Override with --speed=<0.7-1.2> if needed.
+const speedArg = args.find(a => a.startsWith('--speed='));
+const SPEED = speedArg ? parseFloat(speedArg.split('=')[1]) : 0.75;
+const onlyArg = args.find(a => a.startsWith('--only='));
+const ONLY = onlyArg ? onlyArg.split('=')[1].split(',').map(w => w.trim().toLowerCase()) : null;
+
 function requestTTS(word) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({
       text: word,
       model_id: MODEL_ID,
-      voice_settings: { stability: 0.6, similarity_boost: 0.8, style: 0.3, use_speaker_boost: true },
+      voice_settings: { stability: 0.6, similarity_boost: 0.8, style: 0.3, use_speaker_boost: true, speed: SPEED },
     });
     const options = {
       hostname: 'api.elevenlabs.io',
@@ -83,8 +94,14 @@ function requestTTS(word) {
 async function main() {
   if (!fs.existsSync(OUT_DIR)) fs.mkdirSync(OUT_DIR, { recursive: true });
 
+  const wordList = ONLY ? WORDS.filter(w => ONLY.includes(w)) : WORDS;
+  if (ONLY && wordList.length === 0) {
+    console.error(`None of --only=${ONLY.join(',')} matched a known word.`);
+    process.exit(1);
+  }
+
   let generated = 0, skipped = 0, failed = 0;
-  for (const word of WORDS) {
+  for (const word of wordList) {
     const outPath = path.join(OUT_DIR, `${word}.mp3`);
     if (!FORCE && fs.existsSync(outPath)) {
       console.log(`skip   ${word} (already exists, use --force to regenerate)`);
