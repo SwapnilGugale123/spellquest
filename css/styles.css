@@ -156,7 +156,7 @@ input { font-family: inherit; }
 .blank-cell.glow { animation: sq-glow .8s; }
 
 /* Test complete */
-.tc-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 30px 26px; animation: sq-in .4s; }
+.tc-wrap { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 30px 26px; animation: sq-in .4s; }
 .tc-title { font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 30px; text-align: center; line-height: 1.1; }
 .tc-ring { width: 150px; height: 150px; border-radius: 50%; margin: 0 auto; display: flex; align-items: center; justify-content: center; }
 .tc-ring-inner { width: 118px; height: 118px; border-radius: 50%; background: var(--card); display: flex; flex-direction: column; align-items: center; justify-content: center; }
@@ -166,7 +166,7 @@ input { font-family: inherit; }
 .tc-btns { width: 100%; max-width: 340px; display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
 
 /* Level / unit complete */
-.lc-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 30px 24px; background: radial-gradient(circle at 50% 30%, rgba(255,255,255,.9), rgba(238,244,255,.6)); animation: sq-in .4s; }
+.lc-wrap { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 30px 24px; background: radial-gradient(circle at 50% 30%, rgba(255,255,255,.9), rgba(238,244,255,.6)); animation: sq-in .4s; }
 .lc-title { font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 26px; color: var(--blue); text-align: center; }
 .lc-card { background: var(--card); border-radius: 24px; padding: 22px 18px; box-shadow: 0 10px 30px rgba(30,41,59,.14); }
 .lc-caption { font-weight: 700; font-size: 20px; }

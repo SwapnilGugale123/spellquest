@@ -241,7 +241,7 @@
       }
     },
 
-    resolve(correct) {
+    async resolve(correct) {
       const { board, level, session } = this.state;
       if (board.status === 'correct' || board.status === 'done') return;
       const b = this.cloneBoard(); b.status = correct ? 'correct' : 'done';
@@ -253,7 +253,14 @@
       this.persist();
       this.setState({ board: b, encourage: enc });
       if (correct) this.miniConfetti();
-      setTimeout(() => { this.setState({ encourage: null }); this.advance(); }, correct ? 1000 : 1500);
+      if (correct) {
+        // Hear the word once more while it's still on screen, then a short
+        // beat, then move on — reinforces the spelling-to-sound link.
+        await Audio2.speak(b.word);
+        setTimeout(() => { this.setState({ encourage: null }); this.advance(); }, 500);
+      } else {
+        setTimeout(() => { this.setState({ encourage: null }); this.advance(); }, 1500);
+      }
     },
 
     advance() {
@@ -411,6 +418,12 @@
       E('div', { class: 'topbar-title baloo' }, [title]),
       extra,
     ]);
+  }
+  // Small floating back button for full-bleed celebration screens that have
+  // no topBar of their own (test/level complete) — lets a parent back out
+  // without waiting for auto-advance or a decision button.
+  function screenBackBtn(onClick) {
+    return E('button', { class: 'icon-btn', style: { position: 'absolute', top: '16px', left: '16px', zIndex: 5 }, onclick: onClick }, [icon('back', { size: 22 })]);
   }
   function replayBtn(text) {
     return E('button', { class: 'replay-btn', onclick: () => Audio2.speak(text) }, [icon('sound', { size: 22, color: 'var(--blue)' }), 'Hear it']);
@@ -611,6 +624,7 @@
     }
     if (r.tier === 'low') btns.push(bigBtn('Try again', () => App.retryWhole(), { full: true, bg: 'var(--amber-dk)' }));
     return E('div', { class: 'tc-wrap' }, [
+      screenBackBtn(() => App.setState({ screen: 'map' })),
       E('div', { class: 'tc-title baloo', style: { color: cfg.color } }, [cfg.title]),
       ring,
       E('div', { class: 'tc-sub' }, [cfg.sub]),
@@ -622,6 +636,7 @@
     const u = Model.unit(App.state.unitId); const veh = Model.vehicleOf(u.id); const rw = Model.reward(u.id);
     const level = App.state.level;
     return E('div', { class: 'lc-wrap' }, [
+      screenBackBtn(() => App.setState({ screen: 'levelpath' })),
       E('div', { class: 'lc-title baloo' }, ['New part unlocked!']),
       E('div', { class: 'lc-card' }, [vehicleBox(veh.type, rw.parts_unlocked, veh.color, { width: '220px' })]),
       E('div', { class: 'lc-caption' }, ['You’ve built ' + rw.parts_unlocked + ' of 6 parts!']),
@@ -842,6 +857,43 @@
     root.appendChild(shell(body));
   }
 
+  // Where a right-swipe (or a screen's back button) should go. Kept as one
+  // map so swipe-back and tap-back can never disagree with each other.
+  function backTargetFor(screen) {
+    switch (screen) {
+      case 'levelpath': return () => App.setState({ screen: 'map' });
+      case 'garage': return () => App.setState({ screen: 'map' });
+      case 'report': return () => App.setState({ screen: 'map' });
+      case 'admin': return () => App.setState({ screen: 'map' });
+      case 'testcomplete': return App.state.testResult ? () => App.setState({ screen: 'map' }) : null;
+      case 'levelcomplete': return () => App.setState({ screen: 'levelpath' });
+      case 'unitcomplete': return () => App.setState({ screen: 'map' });
+      default: return null; // map (top-level) and game (use pause menu) don't swipe-back
+    }
+  }
+
+  function initSwipeBack() {
+    let startX = null, startY = null, startT = 0;
+    const EDGE = 40; // must start near the left edge, like iOS/Android back-swipe
+    const MIN_DX = 70, MAX_DY = 60, MAX_MS = 700;
+    document.addEventListener('touchstart', e => {
+      if (e.touches.length !== 1) return;
+      const t = e.touches[0];
+      if (t.clientX > EDGE) { startX = null; return; }
+      startX = t.clientX; startY = t.clientY; startT = Date.now();
+    }, { passive: true });
+    document.addEventListener('touchend', e => {
+      if (startX === null) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - startX, dy = Math.abs(t.clientY - startY), dt = Date.now() - startT;
+      startX = null;
+      if (dx > MIN_DX && dy < MAX_DY && dt < MAX_MS) {
+        const go = backTargetFor(App.state.screen);
+        if (go) go();
+      }
+    }, { passive: true });
+  }
+
   function shell(body) {
     const sc = App.state.screen;
     const showTab = ['map', 'garage', 'report'].indexOf(sc) >= 0;
@@ -857,6 +909,7 @@
   }
 
   window.addEventListener('DOMContentLoaded', () => {
+    initSwipeBack();
     App.init().then(() => {
       if (window.SPELLQUEST_START_SCREEN === 'admin') {
         App.setState({ screen: 'admin', adminUnitId: Model.data.settings.current_unit });

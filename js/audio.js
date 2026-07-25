@@ -57,18 +57,32 @@ const Audio2 = (() => {
     });
   }
 
+  // Resolves once the pronunciation has actually finished playing (not just
+  // started) so callers can reliably sequence something after it — e.g. a
+  // pause before advancing to the next word.
   async function speak(word) {
     const fileAudio = await tryFileAudio(word);
     if (fileAudio) {
-      try { fileAudio.currentTime = 0; await fileAudio.play(); return; } catch (e) { /* fall through to TTS */ }
+      try {
+        fileAudio.currentTime = 0;
+        await fileAudio.play();
+        await new Promise(resolve => {
+          fileAudio.addEventListener('ended', resolve, { once: true });
+          fileAudio.addEventListener('error', resolve, { once: true });
+        });
+        return;
+      } catch (e) { /* fall through to TTS */ }
     }
-    try {
-      const u = new SpeechSynthesisUtterance(word);
-      u.rate = 0.85; u.pitch = 1.03; u.lang = 'en-US';
-      if (bestVoice) u.voice = bestVoice;
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(u);
-    } catch (e) { /* no-op: audio isn't essential to progress */ }
+    await new Promise(resolve => {
+      try {
+        const u = new SpeechSynthesisUtterance(word);
+        u.rate = 0.85; u.pitch = 1.03; u.lang = 'en-US';
+        if (bestVoice) u.voice = bestVoice;
+        u.onend = resolve; u.onerror = resolve;
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(u);
+      } catch (e) { resolve(); /* no-op: audio isn't essential to progress */ }
+    });
   }
 
   function getAc() {
