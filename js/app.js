@@ -868,7 +868,10 @@
       case 'testcomplete': return App.state.testResult ? () => App.setState({ screen: 'map' }) : null;
       case 'levelcomplete': return () => App.setState({ screen: 'levelpath' });
       case 'unitcomplete': return () => App.setState({ screen: 'map' });
-      default: return null; // map (top-level) and game (use pause menu) don't swipe-back
+      // Mid-test: open the pause menu rather than jump straight out, so a
+      // swipe/tap can't silently abandon progress on the current word.
+      case 'game': return App.state.paused ? null : () => App.togglePause();
+      default: return null; // top-level map has nowhere to go back to
     }
   }
 
