@@ -1,0 +1,847 @@
+// app.js — game loop, screens, routing. Vanilla JS, no build step (B.2).
+(() => {
+  'use strict';
+
+  /* ---------- tiny DOM builder ---------- */
+  function E(tag, attrs, children) {
+    const e = document.createElement(tag);
+    attrs = attrs || {};
+    for (const k in attrs) {
+      const v = attrs[k];
+      if (v === null || v === undefined || v === false) continue;
+      if (k === 'class') e.className = v;
+      else if (k === 'style' && typeof v === 'object') Object.assign(e.style, v);
+      else if (k.startsWith('on') && typeof v === 'function') e.addEventListener(k.slice(2).toLowerCase(), v);
+      else if (k === 'html') e.innerHTML = v;
+      else e.setAttribute(k, v);
+    }
+    (children || []).forEach(c => {
+      if (c === null || c === undefined || c === false) return;
+      e.appendChild(typeof c === 'string' || typeof c === 'number' ? document.createTextNode(c) : c);
+    });
+    return e;
+  }
+
+  /* ---------- Model: data + persistence over db.js ---------- */
+  const Model = {
+    data: null,
+    _idCounter: 1000,
+    _uid() { return ++this._idCounter; },
+    // Engine.js/Rewards.js take a plain `model` object and call model._uid()
+    // to mint ids without depending on the Model singleton; wire it through.
+    _wireUid() { Object.defineProperty(this.data, '_uid', { value: () => this._uid(), enumerable: false, configurable: true }); },
+
+    async load() {
+      await DB.open();
+      let units = DB.all('SELECT * FROM units');
+      if (units.length === 0) { this.seed(); await this.persist(); return; }
+      this.data = {
+        units: DB.all('SELECT * FROM units'),
+        words: DB.all('SELECT * FROM words'),
+        vehicles: DB.all('SELECT * FROM vehicles'),
+        level_progress: DB.all('SELECT * FROM level_progress'),
+        word_stats: DB.all('SELECT * FROM word_stats'),
+        test_log: DB.all('SELECT * FROM test_log'),
+        rewards: DB.all('SELECT * FROM rewards'),
+        settings: {},
+      };
+      this._wireUid();
+      DB.all('SELECT * FROM settings').forEach(r => {
+        let v = r.value;
+        if (r.key === 'resume') { try { v = JSON.parse(v); } catch (e) { v = null; } }
+        else if (v !== '' && !isNaN(v)) v = +v;
+        this.data.settings[r.key] = v;
+      });
+      const maxId = Math.max(1000, ...['units', 'words', 'vehicles', 'level_progress', 'word_stats', 'test_log', 'rewards']
+        .flatMap(t => this.data[t].map(r => r.id || 0)));
+      this._idCounter = maxId;
+    },
+
+    seed() {
+      const words = (unit, list, start) => list.map((t, i) => ({
+        id: start + i, unit_id: unit, text: t.toLowerCase(),
+        image_path: 'assets/words/' + t.toLowerCase() + '.png',
+        audio_path: 'assets/words/' + t.toLowerCase() + '.mp3', order_index: i,
+      }));
+      // D.5: child already knows ~30-40 words (~2-3 units). Seed Units 1-2 as
+      // pre-completed/optional, Unit 3 as the current unit (parent will refine).
+      this.data = {
+        settings: { current_unit: 3, words_per_test: 5, muted: 0, resume: null },
+        units: [
+          { id: 1, name: 'Unit 1', order_index: 1, vehicle_id: 1, is_unlocked: 1 },
+          { id: 2, name: 'Unit 2', order_index: 2, vehicle_id: 2, is_unlocked: 1 },
+          { id: 3, name: 'Unit 3', order_index: 3, vehicle_id: 3, is_unlocked: 1 },
+          { id: 4, name: 'Unit 4', order_index: 4, vehicle_id: 4, is_unlocked: 0 },
+        ],
+        vehicles: [1, 2, 3, 4].map(i => Rewards.vehicleForUnit(i)),
+        words: [
+          ...words(1, ['Cat', 'Dog', 'Sun', 'Red', 'Box', 'Egg', 'Ball', 'Fish', 'Milk', 'Star', 'Rain', 'Tree'], 101),
+          ...words(2, ['Blue', 'Green', 'White', 'Black', 'Yellow', 'Girl', 'Boy', 'Father', 'Mother', 'Water', 'Tea', 'Coffee'], 201),
+          ...words(3, ['Inside', 'Outside', 'Car', 'Van', 'Bike', 'Cycle', 'Bird', 'Curd', 'Bulb', 'Under', 'Garden', 'Cloud'], 301),
+          ...words(4, ['Apple', 'River', 'Bridge', 'Drum', 'Oval', 'Thirty'], 401),
+        ],
+        level_progress: [], word_stats: [], test_log: [],
+        rewards: [
+          { id: 1, unit_id: 1, parts_unlocked: 6, vehicle_complete: 1 },
+          { id: 2, unit_id: 2, parts_unlocked: 6, vehicle_complete: 1 },
+          { id: 3, unit_id: 3, parts_unlocked: 0, vehicle_complete: 0 },
+          { id: 4, unit_id: 4, parts_unlocked: 0, vehicle_complete: 0 },
+        ],
+      };
+      this._wireUid();
+      [1, 2].forEach(u => { for (let l = 1; l <= 6; l++) this.data.level_progress.push({ id: this._uid(), unit_id: u, level: l, status: 'complete', tests_completed: 5 }); });
+    },
+
+    async persist() {
+      const m = this.data;
+      DB.run('DELETE FROM units'); DB.run('DELETE FROM words'); DB.run('DELETE FROM vehicles');
+      DB.run('DELETE FROM level_progress'); DB.run('DELETE FROM word_stats'); DB.run('DELETE FROM test_log');
+      DB.run('DELETE FROM rewards'); DB.run('DELETE FROM settings');
+      m.units.forEach(u => DB.run('INSERT INTO units VALUES(?,?,?,?,?)', [u.id, u.name, u.order_index, u.vehicle_id, u.is_unlocked]));
+      m.words.forEach(w => DB.run('INSERT INTO words VALUES(?,?,?,?,?,?)', [w.id, w.unit_id, w.text, w.image_path, w.audio_path, w.order_index]));
+      m.vehicles.forEach(v => DB.run('INSERT INTO vehicles VALUES(?,?,?,?,?,?)', [v.id, v.name, v.type, v.part_count, 'assets/vehicles/' + v.type, v.color]));
+      m.level_progress.forEach(l => DB.run('INSERT INTO level_progress VALUES(?,?,?,?,?)', [l.id, l.unit_id, l.level, l.status, l.tests_completed]));
+      m.word_stats.forEach(s => DB.run('INSERT INTO word_stats VALUES(?,?,?,?,?,?,?)', [s.id, s.word_id, s.level, s.times_shown, s.times_correct, s.times_incorrect, s.mastered_for_level]));
+      m.test_log.forEach(t => DB.run('INSERT INTO test_log VALUES(?,?,?,?,?,?)', [t.id, t.unit_id, t.level, t.score_pct, t.words_json, t.timestamp]));
+      m.rewards.forEach(r => DB.run('INSERT INTO rewards VALUES(?,?,?,?)', [r.id, r.unit_id, r.parts_unlocked, r.vehicle_complete]));
+      Object.entries(m.settings).forEach(([k, v]) => DB.run('INSERT INTO settings VALUES(?,?)', [k, typeof v === 'object' ? JSON.stringify(v) : String(v)]));
+      const result = await DB.saveToDisk();
+      return result;
+    },
+
+    unit(id) { return this.data.units.find(u => u.id === id); },
+    wordsOf(unitId) { return Engine.wordsOf(this.data, unitId); },
+    wordById(id) { return this.data.words.find(w => w.id === id); },
+    vehicleOf(unitId) { const u = this.unit(unitId); return this.data.vehicles.find(v => v.id === u.vehicle_id); },
+    reward(unitId) { return Rewards.reward(this.data, unitId); },
+    lp(unitId, level) {
+      let r = this.data.level_progress.find(x => x.unit_id === unitId && x.level === level);
+      if (!r) { r = { id: this._uid(), unit_id: unitId, level, status: 'locked', tests_completed: 0 }; this.data.level_progress.push(r); }
+      return r;
+    },
+    stat(wordId, level) { return Engine.stat(this.data, wordId, level); },
+
+    levelPlayable(unitId, level) { if (level === 1) return true; return this.lp(unitId, level - 1).status === 'complete'; },
+    levelStatus(unitId, level) {
+      const s = this.lp(unitId, level).status;
+      if (s === 'complete') return 'complete';
+      if (this.levelPlayable(unitId, level)) return this.lp(unitId, level).tests_completed > 0 ? 'in_progress' : 'current';
+      return 'locked';
+    },
+    unitStatus(unitId) {
+      const done = [1, 2, 3, 4, 5, 6].every(l => this.lp(unitId, l).status === 'complete');
+      if (done) return 'complete';
+      if (!this.unit(unitId).is_unlocked) return 'locked';
+      return 'current';
+    },
+  };
+
+  /* ---------- App state + controller ---------- */
+  const App = {
+    state: { ready: false, screen: 'loading', unitId: null, level: null, session: null, board: null,
+      testResult: null, muted: false, confetti: 0, encourage: null, lastSaved: null,
+      adminUnitId: null, busy: '', reveal: false, resumeAvail: null, paused: false, saveMode: 'memory' },
+
+    async init() {
+      await Model.load();
+      const resume = Model.data.settings.resume;
+      this.setState({ ready: true, screen: 'map', muted: !!Model.data.settings.muted, resumeAvail: resume || null });
+    },
+
+    setState(patch) { Object.assign(this.state, patch); render(); },
+
+    async persist() {
+      const r = await Model.persist();
+      this.state.saveMode = r.mode;
+      this.state.lastSaved = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      render();
+    },
+
+    /* ----- flow ----- */
+    openUnit(unitId) { if (Model.unitStatus(unitId) === 'locked') return; this.setState({ unitId, screen: 'levelpath' }); },
+
+    startLevel(unitId, level) {
+      if (!Model.levelPlayable(unitId, level)) return;
+      const lpr = Model.lp(unitId, level); if (lpr.status !== 'complete') lpr.status = 'in_progress';
+      this.persist();
+      this.setState({ unitId, level, session: null, testResult: null });
+      this.nextTest();
+    },
+
+    nextTest() {
+      const { unitId, level } = this.state;
+      if (Engine.isLevelComplete(Model.data, unitId, level)) { this.completeLevel(); return; }
+      const ids = Engine.buildTest(Model.data, unitId, level);
+      const session = { words: ids, idx: 0, results: {}, kind: 'normal' };
+      this.setState({ session, testResult: null, screen: 'game' });
+      this.loadWord();
+    },
+
+    startSession(ids, kind) {
+      const session = { words: ids, idx: 0, results: {}, kind };
+      this.setState({ session, testResult: null, screen: 'game' });
+      this.loadWord();
+    },
+
+    loadWord() {
+      const { session, level, unitId } = this.state;
+      const w = Model.wordById(session.words[session.idx]);
+      const board = Engine.buildBoard(Model.data, w, level);
+      Model.data.settings.resume = { unitId, level, words: session.words, idx: session.idx, kind: session.kind };
+      this.persist();
+      this.setState({ board, reveal: false });
+      Audio2.speak(w.text);
+    },
+
+    resume() {
+      const r = this.state.resumeAvail || Model.data.settings.resume;
+      if (!r) return;
+      this.setState({ unitId: r.unitId, level: r.level, session: { words: r.words, idx: r.idx, results: {}, kind: r.kind || 'normal' }, screen: 'game', resumeAvail: null });
+      this.loadWord();
+    },
+
+    cloneBoard() { return JSON.parse(JSON.stringify(this.state.board)); },
+
+    tapTile(item) {
+      const b = this.cloneBoard(); if (b.status !== 'active') return;
+      const expected = b.letters[b.filledCount];
+      const t = b.tray.find(x => x.id === item.id);
+      if (t && !t.used && t.ch === expected) {
+        t.used = true; b.slots[b.filledCount] = t.ch; b.filledCount++; Audio2.tone('pop', this.state.muted);
+        if (b.filledCount >= b.letters.length) { this.setState({ board: b }); this.resolve(true); return; }
+        this.setState({ board: b });
+      } else { this.wrong(b, item.id); }
+    },
+
+    tapOption(item) {
+      const b = this.cloneBoard(); if (b.status !== 'active') return;
+      const blank = b.blanks[b.nextBlank]; if (!blank) return;
+      const expected = b.letters[blank.pos];
+      if (item.ch === expected) {
+        blank.ch = item.ch; b.nextBlank++; Audio2.tone('pop', this.state.muted);
+        if (b.nextBlank >= b.blanks.length) { this.setState({ board: b }); this.resolve(true); return; }
+        this.setState({ board: b });
+      } else { this.wrong(b, item.id); }
+    },
+
+    wrong(b, shakeId) {
+      b.attempts++; b.shakeId = shakeId; Audio2.tone('nope', this.state.muted);
+      if (b.attempts >= 3) {
+        if (b.slots) { b.letters.forEach((ch, i) => { b.slots[i] = ch; }); b.filledCount = b.letters.length; if (b.tray) b.tray.forEach(t => t.used = true); }
+        if (b.blanks) { b.blanks.forEach(bl => bl.ch = b.letters[bl.pos]); b.nextBlank = b.blanks.length; }
+        b.status = 'revealed';
+        this.setState({ board: b, reveal: true });
+        this.resolve(false);
+      } else {
+        this.setState({ board: b });
+        setTimeout(() => { const nb = this.cloneBoard(); if (nb) { nb.shakeId = null; this.setState({ board: nb }); } }, 360);
+      }
+    },
+
+    resolve(correct) {
+      const { board, level, session } = this.state;
+      if (board.status === 'correct' || board.status === 'done') return;
+      const b = this.cloneBoard(); b.status = correct ? 'correct' : 'done';
+      const st = Model.stat(b.wordId, level); st.times_shown++;
+      if (correct) { st.times_correct++; if (st.times_correct >= 3) st.mastered_for_level = 1; Audio2.tone('yes', this.state.muted); }
+      else { st.times_incorrect++; }
+      session.results[session.idx] = correct;
+      const enc = correct && Math.random() < 0.5 ? pick(['Nice!', 'Yes!', 'Good!', 'Great!', 'Woohoo!']) : null;
+      this.persist();
+      this.setState({ board: b, encourage: enc });
+      if (correct) this.miniConfetti();
+      setTimeout(() => { this.setState({ encourage: null }); this.advance(); }, correct ? 1000 : 1500);
+    },
+
+    advance() {
+      const s = { ...this.state.session }; s.idx++;
+      this.setState({ session: s });
+      if (s.idx >= s.words.length) this.finishTest(); else this.loadWord();
+    },
+
+    finishTest() {
+      const { session, unitId, level } = this.state;
+      const total = session.words.length;
+      let correct = 0; const missed = [];
+      for (let i = 0; i < total; i++) { if (session.results[i]) correct++; else missed.push(i); }
+      const score = total ? correct / total : 0;
+      Model.data.test_log.push({
+        id: Model._uid(), unit_id: unitId, level, score_pct: +(score * 100).toFixed(0),
+        words_json: JSON.stringify(session.words.map((wid, i) => ({ word: Model.wordById(wid).text, correct: !!session.results[i] }))),
+        timestamp: new Date().toISOString(),
+      });
+      Model.lp(unitId, level).tests_completed++;
+      const tier = Engine.scoreTier(score);
+      Model.data.settings.resume = null;
+      this.persist();
+      this.setState({ testResult: { score, correct, total, missed, tier }, screen: 'testcomplete' });
+      if (tier !== 'low') { this.bigConfetti(); Audio2.tone('win', this.state.muted); }
+    },
+
+    testContinue() { this.setState({ testResult: null }); this.nextTest(); },
+    retryMissed() { const { session, testResult } = this.state; const ids = testResult.missed.map(i => session.words[i]); this.startSession(ids, 'retry'); },
+    retryWhole() { this.setState({ testResult: null }); this.nextTest(); },
+
+    completeLevel() {
+      const { unitId, level } = this.state;
+      Model.lp(unitId, level).status = 'complete';
+      Rewards.unlockPart(Model.data, unitId, level);
+      if (level < 6) { const nx = Model.lp(unitId, level + 1); if (nx.status === 'locked') nx.status = 'current'; }
+      const unitDone = [1, 2, 3, 4, 5, 6].every(l => Model.lp(unitId, l).status === 'complete');
+      if (unitDone) {
+        Rewards.completeVehicle(Model.data, unitId);
+        const nu = Model.data.units.find(u => u.order_index === Model.unit(unitId).order_index + 1);
+        if (nu) nu.is_unlocked = 1;
+      }
+      this.persist();
+      this.setState({ screen: unitDone ? 'unitcomplete' : 'levelcomplete' });
+      this.bigConfetti(); Audio2.tone('win', this.state.muted);
+    },
+
+    toggleMute() { const m = !this.state.muted; Model.data.settings.muted = m ? 1 : 0; this.persist(); this.setState({ muted: m }); },
+    togglePause() { this.setState({ paused: !this.state.paused }); },
+
+    bigConfetti() { this.setState({ confetti: 60 }); setTimeout(() => this.setState({ confetti: 0 }), 2600); },
+    miniConfetti() { /* handled via inline glow */ },
+
+    /* ----- admin actions ----- */
+    setCurrentUnit(unitId) {
+      Model.data.settings.current_unit = unitId;
+      Model.data.units.forEach(u => { if (u.order_index <= Model.unit(unitId).order_index) u.is_unlocked = 1; });
+      this.persist(); render();
+    },
+    markUnitComplete(unitId) {
+      for (let l = 1; l <= 6; l++) Model.lp(unitId, l).status = 'complete';
+      Rewards.completeVehicle(Model.data, unitId);
+      Model.wordsOf(unitId).forEach(w => { for (let l = 1; l <= 6; l++) { const s = Model.stat(w.id, l); s.times_correct = Math.max(s.times_correct, 3); s.mastered_for_level = 1; } });
+      this.persist(); render();
+    },
+    addWord(unitId, text) {
+      text = (text || '').trim(); if (!text) return;
+      const ord = Model.wordsOf(unitId).length;
+      Model.data.words.push({ id: Model._uid(), unit_id: unitId, text: text.toLowerCase(),
+        image_path: 'assets/words/' + text.toLowerCase() + '.png', audio_path: 'assets/words/' + text.toLowerCase() + '.mp3', order_index: ord });
+      this.persist(); render();
+    },
+    removeWord(id) {
+      Model.data.words = Model.data.words.filter(w => w.id !== id);
+      Model.data.word_stats = Model.data.word_stats.filter(s => s.word_id !== id);
+      this.persist(); render();
+    },
+    addUnit(name) {
+      name = (name || '').trim(); if (!name) return;
+      const ord = Model.data.units.length + 1; const id = Model._uid();
+      Model.data.vehicles.push(Rewards.vehicleForUnit(ord));
+      Model.data.units.push({ id, name, order_index: ord, vehicle_id: ord, is_unlocked: 0 });
+      Model.data.rewards.push({ id: Model._uid(), unit_id: id, parts_unlocked: 0, vehicle_complete: 0 });
+      this.persist(); this.setState({ adminUnitId: id });
+    },
+    resetAll() {
+      if (!confirm('Reset ALL progress and content back to the seed data?')) return;
+      Model.seed(); this.persist();
+      this.setState({ screen: 'map', unitId: null, level: null });
+    },
+  };
+
+  function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
+
+  /* ---------- Icons ---------- */
+  const NS = 'http://www.w3.org/2000/svg';
+  function svgEl(tag, attrs) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; }
+  function icon(name, opt) {
+    opt = opt || {}; const s = opt.size || 24; const c = opt.color || 'currentColor'; const sw = opt.stroke || 2.4;
+    const svg = svgEl('svg', { width: s, height: s, viewBox: '0 0 24 24', fill: 'none', stroke: c, 'stroke-width': sw, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' });
+    svg.style.display = 'block';
+    const p = d => svgEl('path', { d });
+    const add = (...els) => els.forEach(el => svg.appendChild(el));
+    switch (name) {
+      case 'sound': add(svgEl('path', { d: 'M4 9.5h3l4.5-3.5v12L7 14.5H4z', fill: c, stroke: 'none' }), p('M16 8.6a4 4 0 010 6.8'), p('M18.6 6a7.5 7.5 0 010 12')); break;
+      case 'mute': add(svgEl('path', { d: 'M4 9.5h3l4.5-3.5v12L7 14.5H4z', fill: c, stroke: 'none' }), p('M17 9.5l4.5 5'), p('M21.5 9.5l-4.5 5')); break;
+      case 'garage': add(p('M4 21V9.2l8-4.8 8 4.8V21'), p('M8 21v-6h8v6'), p('M8 12.2h8')); break;
+      case 'admin': add(p('M4 7.5h16'), p('M4 12h16'), p('M4 16.5h16'), svgEl('circle', { cx: 9, cy: 7.5, r: 2.3, fill: '#F1F6FF', stroke: c }), svgEl('circle', { cx: 15, cy: 12, r: 2.3, fill: '#F1F6FF', stroke: c }), svgEl('circle', { cx: 8, cy: 16.5, r: 2.3, fill: '#F1F6FF', stroke: c })); break;
+      case 'lock': add(svgEl('rect', { x: 5, y: 10.5, width: 14, height: 9.8, rx: 2.6, fill: c, stroke: 'none' }), p('M8 10.5V8a4 4 0 018 0v2.5')); break;
+      case 'check': add(p('M5 12.6l4.3 4.2L19 6.9')); break;
+      case 'close': add(p('M6 6l12 12'), p('M18 6L6 18')); break;
+      case 'back': add(p('M15 5l-7 7 7 7')); break;
+      case 'play': add(svgEl('path', { d: 'M8 5.5v13l11-6.5z', fill: c, stroke: 'none' })); break;
+      case 'pause': add(svgEl('rect', { x: 7, y: 5, width: 4, height: 14, rx: 1, fill: c, stroke: 'none' }), svgEl('rect', { x: 14, y: 5, width: 4, height: 14, rx: 1, fill: c, stroke: 'none' })); break;
+      case 'home': add(p('M4 11l8-6.4 8 6.4'), p('M6 9.6V20h12V9.6'), p('M10 20v-5h4v5')); break;
+      case 'doc': add(svgEl('rect', { x: 5, y: 3.5, width: 14, height: 17, rx: 2.6 }), p('M8.5 8.5h7'), p('M8.5 12h7'), p('M8.5 15.5h4')); break;
+      default: break;
+    }
+    return svg;
+  }
+
+  function darken(hex) {
+    const m = { '#3B82F6': '#2563EB', '#22C55E': '#16A34A', '#FB7185': '#E11D62', '#A78BFA': '#7C3AED', '#FACC15': '#CA8A04', '#FDBA74': '#F59E0B' };
+    return m[hex] || 'rgba(0,0,0,.25)';
+  }
+
+  /* ---------- reusable UI pieces ---------- */
+  function bigBtn(label, onClick, opt) {
+    opt = opt || {};
+    const bg = opt.bg || 'var(--blue)';
+    return E('button', { class: 'big-btn' + (opt.full ? ' full' : '') + (opt.ghost ? ' ghost' : ''), disabled: opt.disabled,
+      style: Object.assign({ background: opt.ghost ? undefined : bg, boxShadow: opt.disabled || opt.ghost ? undefined : '0 6px 0 ' + darken(bg) + ', 0 10px 20px rgba(30,41,59,.14)' }, opt.style || {}),
+      onclick: onClick }, [label]);
+  }
+  function iconBtn(iconName, onClick, active) {
+    return E('button', { class: 'icon-btn' + (active ? ' active' : ''), onclick: onClick }, [icon(iconName, { size: 22, color: active ? '#fff' : undefined })]);
+  }
+  function topBar(title, onBack, extra) {
+    return E('div', { class: 'topbar' }, [
+      onBack ? E('button', { class: 'icon-btn', onclick: onBack }, [icon('back', { size: 22 })]) : null,
+      E('div', { class: 'topbar-title baloo' }, [title]),
+      extra,
+    ]);
+  }
+  function replayBtn(text) {
+    return E('button', { class: 'replay-btn', onclick: () => Audio2.speak(text) }, [icon('sound', { size: 22, color: 'var(--blue)' }), 'Hear it']);
+  }
+  function imageBox(word, size) {
+    size = size || 140;
+    const box = E('div', { class: 'image-box', style: { width: size + 'px', height: size + 'px' } });
+    box.appendChild(Illustrations.render(word));
+    return box;
+  }
+  function vehicleBox(type, parts, color, opt) {
+    const wrap = E('div', { style: { width: (opt && opt.width) || '100%', margin: '0 auto' } });
+    wrap.appendChild(Vehicles.render(type, parts, color, opt));
+    return wrap;
+  }
+
+  /* ---------- Screens ---------- */
+  function viewMap() {
+    const units = [...Model.data.units].sort((a, b) => a.order_index - b.order_index);
+    const rows = [];
+    units.forEach((u, i) => {
+      const st = Model.unitStatus(u.id); const rw = Model.reward(u.id); const veh = Model.vehicleOf(u.id); const locked = st === 'locked';
+      const grad = locked ? 'linear-gradient(180deg,#E5EAF2,#CBD5E1)' : 'linear-gradient(180deg, rgba(255,255,255,.45), rgba(255,255,255,0) 52%), ' + veh.color;
+      const ring = locked ? 'rgba(0,0,0,.06)' : darken(veh.color);
+      const off = i % 2 === 0 ? -44 : 44;
+      const btn = E('button', { class: 'unit-node-btn' + (st === 'current' ? ' current' : ''), disabled: locked,
+        style: { transform: 'translateX(' + off + 'px)', background: grad, boxShadow: 'inset 0 -7px 0 ' + ring + ', 0 14px 28px rgba(30,41,59,.16)' },
+        onclick: () => App.openUnit(u.id) },
+        [E('div', { class: 'unit-node-inner' }, [locked ? icon('lock', { size: 32, color: 'var(--muted)' }) : (() => { const b = vehicleBox(veh.type, 6, veh.color, { width: '56px' }); return b; })()]),
+         st === 'complete' ? E('div', { class: 'unit-badge' }, [icon('check', { size: 18, color: '#8A5A08', stroke: 3 })]) : null]);
+      rows.push(E('div', { class: 'unit-node-wrap' }, [
+        E('div', { style: { transform: 'translateX(' + off + 'px)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' } }, [
+          btn,
+          E('div', { class: 'unit-name-pill', style: { color: locked ? 'var(--muted)' : 'var(--text)' } }, [u.name]),
+          E('div', { class: 'unit-status-text', style: { color: st === 'complete' ? 'var(--green)' : (locked ? 'var(--muted)' : 'var(--blue-dk)') } },
+            [st === 'complete' ? 'Mastered' : st === 'current' ? (rw.parts_unlocked > 0 ? rw.parts_unlocked + ' / 6 parts' : 'Start here') : 'Locked']),
+        ]),
+      ]));
+      if (i < units.length - 1) rows.push(E('div', { class: 'unit-connector' }, [E('div', { class: 'unit-connector-track' })]));
+    });
+    rows.push(E('div', { style: { position: 'relative', height: '80px', marginTop: '14px', textAlign: 'center', color: '#0F766E', fontWeight: 700, fontFamily: "'Baloo 2',sans-serif", fontSize: '13px', opacity: .7, paddingTop: '30px' } }, ['More adventures soon!']));
+
+    const cur = Model.unit(Model.data.settings.current_unit) || Model.data.units[0];
+    const veh = Model.vehicleOf(cur.id);
+    const parts = Model.reward(cur.id).parts_unlocked;
+    let lvl = 6; for (let l = 1; l <= 6; l++) { if (Model.lp(cur.id, l).status !== 'complete') { lvl = l; break; } }
+    const dots = []; for (let i = 0; i < 6; i++) dots.push(E('div', { class: 'hero-dot' + (i < parts ? ' on' : '') }));
+
+    return E('div', { style: { flex: 1, display: 'flex', flexDirection: 'column', paddingBottom: '44px' } }, [
+      E('div', { class: 'map-header' }, [
+        E('div', { class: 'map-logo' }, ['S']),
+        E('div', { style: { flex: 1 } }, [
+          E('div', { class: 'map-title' }, [E('span', { class: 'brand-1' }, ['Spell']), E('span', { class: 'brand-2' }, ['Quest'])]),
+          E('div', { class: 'saved-row' }, [E('div', { class: 'saved-dot' }), E('div', { class: 'saved-text' }, ['Saved ' + (App.state.lastSaved || '')])]),
+        ]),
+        iconBtn(App.state.muted ? 'mute' : 'sound', () => App.toggleMute()),
+        iconBtn('garage', () => App.setState({ screen: 'garage' })),
+        iconBtn('admin', () => App.setState({ screen: 'admin', adminUnitId: Model.data.settings.current_unit })),
+      ]),
+      E('div', { class: 'hero' }, [
+        E('div', { class: 'hero-eyebrow' }, ['Current adventure']),
+        E('div', { class: 'hero-name' }, [cur.name]),
+        E('div', { class: 'hero-sub' }, ['Level ' + lvl + ' • ' + veh.name]),
+        E('div', { class: 'hero-dots' }, dots),
+        E('div', { style: { display: 'flex', alignItems: 'center', gap: '14px', marginTop: '16px' } }, [
+          E('button', { class: 'hero-play', onclick: () => App.openUnit(cur.id) }, [icon('play', { size: 18, color: '#fff' }), 'Play']),
+          E('div', { style: { fontSize: '12.5px', fontWeight: 700, opacity: .92 } }, [parts + ' / 6 parts built']),
+        ]),
+      ]),
+      App.state.resumeAvail ? E('div', { class: 'resume-banner' }, [
+        E('div', { class: 'resume-text' }, ['Pick up where you left off']),
+        bigBtn('Resume', () => App.resume(), { style: { padding: '10px 18px', fontSize: '14px' } }),
+      ]) : null,
+      E('div', { class: 'section-label' }, ['Adventure Map']),
+      E('div', { style: { display: 'flex', flexDirection: 'column', marginTop: '8px', paddingTop: '6px' } }, rows),
+    ]);
+  }
+
+  const LV = [
+    { n: 1, name: 'Arrange', sub: 'Own letters', support: 'Word · Picture · Sound' },
+    { n: 2, name: 'Arrange+', sub: 'Spot the right letters', support: 'Word · Picture · Sound' },
+    { n: 3, name: 'One blank', sub: 'Pick 1 of 3', support: 'Picture · Sound' },
+    { n: 4, name: 'More blanks', sub: 'Pick from 5', support: 'Picture · Sound' },
+    { n: 5, name: 'Skeleton', sub: 'No picture', support: 'Sound only' },
+    { n: 6, name: 'From sound', sub: 'You spell it', support: 'Sound only' },
+  ];
+
+  function viewLevelPath() {
+    const u = Model.unit(App.state.unitId); const veh = Model.vehicleOf(u.id); const rw = Model.reward(u.id);
+    const nodes = LV.map(lv => {
+      const st = Model.levelStatus(u.id, lv.n); const locked = st === 'locked';
+      const color = st === 'complete' ? 'var(--green)' : locked ? '#E2E8F0' : 'var(--blue)';
+      return E('button', { class: 'level-node' + (locked ? ' locked' : '') + ((st === 'current' || st === 'in_progress') ? ' current' : ''), disabled: locked,
+        onclick: () => App.startLevel(u.id, lv.n) }, [
+        E('div', { class: 'level-node-badge', style: { background: color } }, [locked ? icon('lock', { size: 24, color: '#fff' }) : st === 'complete' ? icon('check', { size: 26, color: '#fff', stroke: 3 }) : String(lv.n)]),
+        E('div', { style: { flex: 1 } }, [
+          E('div', { class: 'level-node-title', style: { color: locked ? 'var(--muted)' : 'var(--text)' } }, ['Level ' + lv.n + ' · ' + lv.name]),
+          E('div', { class: 'level-node-sub' }, [lv.sub + ' • ' + lv.support]),
+        ]),
+        st === 'complete' ? E('div', { style: { fontSize: '12px', fontWeight: 700, color: 'var(--green)' } }, ['part ' + lv.n]) : null,
+      ]);
+    });
+    return E('div', { style: { flex: 1, display: 'flex', flexDirection: 'column' } }, [
+      topBar(u.name, () => App.setState({ screen: 'map' }), iconBtn('garage', () => App.setState({ screen: 'garage' }))),
+      E('div', { style: { padding: '6px 18px 0' } }, [
+        E('div', { class: 'veh-preview-card' }, [
+          E('div', { style: { fontSize: '13px', fontWeight: 700, color: 'var(--muted)', textAlign: 'center', marginBottom: '4px' } }, ['Building: ' + veh.name + ' — ' + rw.parts_unlocked + ' / 6 parts']),
+          vehicleBox(veh.type, rw.parts_unlocked, veh.color, { width: '220px' }),
+        ]),
+      ]),
+      E('div', { style: { padding: '0 18px 30px' } }, nodes),
+    ]);
+  }
+
+  function renderSlots(b) {
+    return E('div', { class: 'slots-row' }, b.slots.map((ch, i) => {
+      const filling = i === b.filledCount && b.status === 'active';
+      const ok = b.status === 'correct';
+      return E('div', { class: 'slot' + (ch ? ' filled' : '') + (ch && ok ? ' correct' : '') + (filling ? ' filling' : '') + (ok && ch ? ' glow' : '') }, [ch || '']);
+    }));
+  }
+  function renderTray(b) {
+    const disabled = b.status !== 'active';
+    return E('div', { class: 'tray-row' }, b.tray.map(t => t.used
+      ? E('div', { class: 'tray-tile used' })
+      : E('button', { class: 'tray-tile' + (b.shakeId === t.id ? ' shake' : ''), disabled, onclick: () => App.tapTile(t) }, [t.ch])));
+  }
+  function renderBlanks(b) {
+    return E('div', { class: 'blanks-row' }, b.letters.map((ch, i) => {
+      const bl = b.blanks.find(x => x.pos === i); const isBlank = !!bl; const filled = isBlank && bl.ch;
+      const active = isBlank && bl === b.blanks[b.nextBlank] && b.status === 'active';
+      const ok = b.status === 'correct';
+      return E('div', { class: 'blank-cell ' + (isBlank ? 'blank' : 'letter') + (filled ? ' filled' : '') + (filled && ok ? ' correct' : '') + (active ? ' active' : '') + (ok && filled ? ' glow' : '') },
+        [isBlank ? (filled ? bl.ch : '') : ch]);
+    }));
+  }
+  function renderOptions(b) {
+    const disabled = b.status !== 'active';
+    return E('div', { class: 'options-row' }, b.options.map(o =>
+      E('button', { class: 'option-btn' + (b.shakeId === o.id ? ' shake' : ''), disabled, onclick: () => App.tapOption(o) }, [o.ch])));
+  }
+
+  function viewGame() {
+    const b = App.state.board; const s = App.state.session; if (!b) return E('div');
+    const progW = ((s.idx + (b.status !== 'active' ? 1 : 0)) / s.words.length) * 100;
+    const showWord = App.state.level <= 2;
+    return E('div', { style: { flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' } }, [
+      E('div', { class: 'game-top' }, [
+        E('button', { class: 'icon-btn', onclick: () => App.togglePause() }, [icon('pause', { size: 20 })]),
+        E('div', { class: 'game-progress-track' }, [E('div', { class: 'game-progress-fill', style: { width: progW + '%' } })]),
+        iconBtn(App.state.muted ? 'mute' : 'sound', () => App.toggleMute()),
+      ]),
+      E('div', { class: 'game-word-count' }, ['Word ' + (s.idx + 1) + ' of ' + s.words.length + ' · Level ' + App.state.level]),
+      E('div', { class: 'stimulus' }, [
+        showWord ? E('div', { class: 'stimulus-word baloo' }, [b.word]) : null,
+        b.image ? imageBox(b.word, 130) : null,
+        E('div', { style: { display: 'flex', gap: '10px', alignItems: 'center' } }, [
+          replayBtn(b.word),
+          App.state.level >= 5 ? E('div', { style: { fontSize: '12px', fontWeight: 700, color: 'var(--muted)', fontFamily: 'monospace' } }, [App.state.level === 6 ? 'SOUND ONLY' : 'NO PICTURE']) : null,
+        ]),
+      ]),
+      E('div', { class: 'answer-area' }, [
+        b.slots ? renderSlots(b) : renderBlanks(b),
+        App.state.encourage ? E('div', { class: 'encourage-text baloo' }, [App.state.encourage]) : null,
+        b.status === 'revealed' ? E('div', { class: 'reveal-text' }, ['The word is “' + b.word + '” — you’ll get it next time!']) : null,
+      ]),
+      E('div', { class: 'input-tray' }, [b.tray ? renderTray(b) : renderOptions(b)]),
+      App.state.paused ? viewPauseOverlay() : null,
+    ]);
+  }
+
+  function viewPauseOverlay() {
+    return E('div', { class: 'pause-overlay' }, [
+      E('div', { class: 'pause-card' }, [
+        E('div', { class: 'pause-title' }, ['Paused']),
+        bigBtn('Resume', () => App.togglePause(), { full: true, bg: 'var(--green)' }),
+        bigBtn(App.state.muted ? 'Unmute sound' : 'Mute sound', () => App.toggleMute(), { full: true, ghost: true }),
+        bigBtn('Back to map', () => { App.setState({ paused: false, screen: 'map' }); }, { full: true, ghost: true }),
+      ]),
+    ]);
+  }
+
+  function viewTestComplete() {
+    const r = App.state.testResult; const pct = Math.round(r.score * 100);
+    const cfg = r.tier === 'hi' ? { title: 'Fantastic! Great job!', color: 'var(--green)', sub: 'You nailed it!' }
+      : r.tier === 'mid' ? { title: 'Great job!', color: 'var(--blue)', sub: 'A few tricky ones left.' }
+      : { title: 'Almost there!', color: 'var(--amber-dk)', sub: 'Let’s try that again.' };
+    const ring = E('div', { class: 'tc-ring', style: { background: `conic-gradient(${cfg.color} ${pct * 3.6}deg, #E2E8F0 0deg)` } }, [
+      E('div', { class: 'tc-ring-inner' }, [E('div', { class: 'tc-pct baloo', style: { color: cfg.color } }, [pct + '%']), E('div', { class: 'tc-frac' }, [r.correct + ' / ' + r.total])]),
+    ]);
+    const btns = [];
+    if (r.tier === 'hi') btns.push(bigBtn('Continue', () => App.testContinue(), { full: true, bg: 'var(--green)' }));
+    if (r.tier === 'mid') {
+      btns.push(bigBtn('Retry the tricky ones', () => App.retryMissed(), { full: true, bg: 'var(--blue)' }));
+      btns.push(bigBtn('Continue anyway', () => App.testContinue(), { full: true, ghost: true }));
+    }
+    if (r.tier === 'low') btns.push(bigBtn('Try again', () => App.retryWhole(), { full: true, bg: 'var(--amber-dk)' }));
+    return E('div', { class: 'tc-wrap' }, [
+      E('div', { class: 'tc-title baloo', style: { color: cfg.color } }, [cfg.title]),
+      ring,
+      E('div', { class: 'tc-sub' }, [cfg.sub]),
+      E('div', { class: 'tc-btns' }, btns),
+    ]);
+  }
+
+  function viewLevelComplete() {
+    const u = Model.unit(App.state.unitId); const veh = Model.vehicleOf(u.id); const rw = Model.reward(u.id);
+    return E('div', { class: 'lc-wrap' }, [
+      E('div', { class: 'lc-title baloo' }, ['New part unlocked!']),
+      E('div', { class: 'lc-card' }, [vehicleBox(veh.type, rw.parts_unlocked, veh.color, { width: '220px' })]),
+      E('div', { class: 'lc-caption' }, ['You’ve built ' + rw.parts_unlocked + ' of 6 parts!']),
+      E('div', { class: 'lc-body' }, ['Keep going to finish your ' + veh.name + '.']),
+      bigBtn('Continue', () => App.setState({ screen: 'levelpath' }), { bg: 'var(--green)', style: { marginTop: '8px', minWidth: '200px' } }),
+    ]);
+  }
+
+  function viewUnitComplete() {
+    const u = Model.unit(App.state.unitId); const veh = Model.vehicleOf(u.id);
+    return E('div', { class: 'lc-wrap' }, [
+      E('div', { class: 'uc-title baloo' }, [u.name + ' mastered!']),
+      E('div', { class: 'uc-drive-wrap' }, [E('div', { class: 'uc-drive' }, [vehicleBox(veh.type, 6, veh.color, { width: '260px' })])]),
+      E('div', { class: 'lc-caption' }, ['Your ' + veh.name + ' is complete! 🎉']),
+      E('div', { class: 'uc-btns' }, [
+        bigBtn('See my Garage', () => App.setState({ screen: 'garage' }), { bg: 'var(--violet)' }),
+        bigBtn('Unit report', () => App.setState({ screen: 'report' }), { ghost: true }),
+        bigBtn('Back to map', () => App.setState({ screen: 'map' }), { bg: 'var(--blue)' }),
+      ]),
+    ]);
+  }
+
+  function viewGarage() {
+    const cards = Model.data.units.map(u => {
+      const veh = Model.vehicleOf(u.id); const rw = Model.reward(u.id); const done = rw.vehicle_complete;
+      return E('div', { class: 'garage-card' }, [
+        E('div', { style: { cursor: 'pointer' }, onclick: () => { Audio2.speak(veh.name); Audio2.tone('win', App.state.muted); } }, [vehicleBox(veh.type, done ? 6 : rw.parts_unlocked, veh.color, { width: '160px' })]),
+        E('div', { class: 'garage-name' }, [veh.name]),
+        E('div', { class: 'garage-status' + (done ? ' done' : '') }, [done ? '★ Complete' : rw.parts_unlocked > 0 ? rw.parts_unlocked + ' / 6 built' : 'Not started — ' + u.name]),
+      ]);
+    });
+    return E('div', { style: { flex: 1, display: 'flex', flexDirection: 'column' } }, [
+      topBar('My Garage', () => App.setState({ screen: 'map' })),
+      E('div', { class: 'garage-grid' }, cards),
+    ]);
+  }
+
+  function viewReport() {
+    const u = Model.unit(App.state.unitId || Model.data.settings.current_unit);
+    const rows = Model.wordsOf(u.id).map(w => {
+      let shown = 0, cor = 0, inc = 0;
+      [1, 2, 3, 4, 5, 6].forEach(l => { const s = Model.stat(w.id, l); shown += s.times_shown; cor += s.times_correct; inc += s.times_incorrect; });
+      const acc = shown ? Math.round(cor / (cor + inc || 1) * 100) : 0;
+      return { w, shown, cor, inc, acc };
+    });
+    const weak = [...rows].filter(r => r.shown > 0).sort((a, b) => a.acc - b.acc).slice(0, 3).map(r => r.w.id);
+    return E('div', { style: { flex: 1, display: 'flex', flexDirection: 'column' } }, [
+      topBar('Report · ' + u.name, () => App.setState({ screen: 'map' }), bigBtn('Print', () => window.print(), { style: { padding: '8px 14px', fontSize: '13px' } })),
+      E('div', { style: { padding: '6px 18px 30px' } }, [
+        E('div', { class: 'report-table' }, [
+          E('div', { class: 'report-row head' }, [E('div', {}, ['Word']), E('div', {}, ['Shown']), E('div', {}, ['✓']), E('div', {}, ['✗']), E('div', {}, ['Accuracy'])]),
+          ...rows.map(r => E('div', { class: 'report-row' + (weak.includes(r.w.id) ? ' weak' : '') }, [
+            E('div', { style: { fontWeight: 700 } }, [r.w.text + (weak.includes(r.w.id) ? ' ⚑' : '')]),
+            E('div', {}, [String(r.shown)]),
+            E('div', { style: { color: 'var(--green)', fontWeight: 700 } }, [String(r.cor)]),
+            E('div', { style: { color: 'var(--coral)', fontWeight: 700 } }, [String(r.inc)]),
+            E('div', { style: { fontWeight: 700 } }, [r.acc + '%']),
+          ])),
+        ]),
+        E('div', { class: 'report-note' }, ['⚑ = focus words for targeted practice. Print this page, export it to PDF, or ', E('a', { href: '#', onclick: e => { e.preventDefault(); downloadStaticReport(u, rows, weak); } }, ['save a copy into /reports/']), '.']),
+      ]),
+    ]);
+  }
+
+  function downloadStaticReport(u, rows, weak) {
+    const dateStr = new Date().toLocaleDateString();
+    const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>SpellQuest Report — ${u.name}</title>
+<style>
+  body{font-family:system-ui,-apple-system,sans-serif;background:#F8FAFC;color:#1E293B;margin:0;padding:32px;}
+  h1{font-size:22px;margin:0 0 4px;} .sub{color:#64748B;font-size:13px;margin-bottom:20px;}
+  table{width:100%;max-width:640px;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(30,41,59,.08);}
+  th,td{text-align:left;padding:10px 14px;font-size:14px;} th{background:#F1F5F9;color:#64748B;font-size:12.5px;text-transform:uppercase;letter-spacing:.4px;}
+  tr.weak{background:#FFF7ED;} tr:not(:first-child) td{border-top:1px solid #F1F5F9;}
+  .note{margin-top:16px;font-size:13px;color:#64748B;max-width:640px;}
+  @media print{ body{padding:0;} }
+</style></head><body>
+  <h1>SpellQuest — ${u.name} Report</h1>
+  <div class="sub">Generated ${dateStr}</div>
+  <table><tr><th>Word</th><th>Shown</th><th>Correct</th><th>Incorrect</th><th>Accuracy</th></tr>
+  ${rows.map(r => `<tr class="${weak.includes(r.w.id) ? 'weak' : ''}"><td>${r.w.text}${weak.includes(r.w.id) ? ' ⚑' : ''}</td><td>${r.shown}</td><td>${r.cor}</td><td>${r.inc}</td><td>${r.acc}%</td></tr>`).join('')}
+  </table>
+  <div class="note">⚑ = focus words for targeted practice with the child.</div>
+</body></html>`;
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'report-' + u.name.toLowerCase().replace(/\s+/g, '-') + '-' + Date.now() + '.html';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function viewAdmin() {
+    const au = App.state.adminUnitId || Model.data.units[0].id;
+    const unitRows = Model.data.units.map(u => {
+      const cur = Model.data.settings.current_unit === u.id; const st = Model.unitStatus(u.id);
+      return E('div', { class: 'admin-row' + (App.state.adminUnitId === u.id ? ' current' : '') }, [
+        E('button', { style: { flex: 1, textAlign: 'left', fontWeight: cur ? 700 : 500, fontSize: '14px' }, onclick: () => App.setState({ adminUnitId: u.id }) },
+          [u.name + ' · ' + Model.wordsOf(u.id).length + ' words' + (cur ? '  ◀ current' : '') + (st === 'complete' ? '  ✓' : '')]),
+        E('button', { class: 'pill-btn', style: { background: '#EFF6FF', color: 'var(--blue-dk)' }, onclick: () => App.setCurrentUnit(u.id) }, ['Set current']),
+        E('button', { class: 'pill-btn', style: { background: '#ECFDF5', color: 'var(--green)' }, onclick: () => App.markUnitComplete(u.id) }, ['Mark done']),
+      ]);
+    });
+    let newWordVal = '', newUnitVal = '';
+    const words = Model.wordsOf(au).map(w => E('div', { class: 'admin-row' }, [
+      E('div', { style: { flex: 1, fontSize: '14px', fontWeight: 600 } }, [w.text]),
+      E('button', { class: 'pill-btn', style: { background: '#F1F5F9' }, onclick: () => Audio2.speak(w.text) }, ['▶ audio']),
+      E('div', { style: { fontSize: '11px', color: 'var(--muted)', fontFamily: 'monospace' } }, [w.image_path.split('/').pop()]),
+      E('button', { class: 'pill-btn', style: { background: '#FEF2F2', color: 'var(--coral)', fontWeight: 700 }, onclick: () => App.removeWord(w.id) }, ['✕']),
+    ]));
+    const label = t => E('div', { class: 'admin-label' }, [t]);
+
+    const newWordInput = E('input', { class: 'admin-input', placeholder: 'Add a word (e.g. bridge)',
+      onkeydown: e => { if (e.key === 'Enter') { App.addWord(au, e.target.value); } } });
+    const newUnitInput = E('input', { class: 'admin-input', placeholder: 'New unit name' });
+
+    return E('div', { class: 'admin-shell' }, [
+      E('div', { class: 'admin-header' }, [
+        E('button', { class: 'admin-btn', style: { background: '#F1F5F9' }, onclick: () => App.setState({ screen: 'map' }) }, ['‹ Back to game']),
+        E('div', { style: { fontWeight: 700, fontSize: '16px' } }, ['Parent Admin']),
+      ]),
+      E('div', { class: 'admin-body' }, [
+        label('Units'),
+        E('div', { class: 'admin-list' }, unitRows),
+        E('div', { style: { display: 'flex', gap: '8px', marginTop: '10px' } }, [
+          newUnitInput,
+          E('button', { class: 'admin-btn', style: { background: 'var(--blue)', color: '#fff' }, onclick: () => App.addUnit(newUnitInput.value) }, ['Add unit']),
+        ]),
+        label('Words in ' + Model.unit(au).name),
+        E('div', { class: 'admin-list' }, words.length ? words : [E('div', { style: { padding: '12px', color: 'var(--muted)', fontSize: '14px' } }, ['No words yet.'])]),
+        E('div', { style: { display: 'flex', gap: '8px', marginTop: '10px' } }, [
+          newWordInput,
+          E('button', { class: 'admin-btn', style: { background: 'var(--green)', color: '#fff' }, onclick: () => App.addWord(au, newWordInput.value) }, ['Add word']),
+        ]),
+        E('div', { class: 'admin-note' }, ['Images: hand-drawn SVGs are built in for common words; unknown words fall back to a labeled tile until you drop a matching PNG in assets/words/. Audio: uses the best available system voice, or a real MP3 at assets/words/<word>.mp3 if present.']),
+
+        label('Move progress to another device (OneDrive sync)'),
+        E('div', { class: 'admin-note', style: { marginTop: 0, marginBottom: '8px' } }, [
+          'Progress always saves automatically on THIS device as you play — nothing to do for that. To bring that progress to a different phone or the laptop: tap Export here, save the file into the SpellQuest folder in OneDrive (replacing the old one), let it sync, then on the other device open Parent Admin and tap Import and pick that same file.',
+        ]),
+        E('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, [
+          E('button', { class: 'admin-btn', style: { background: 'var(--blue)', color: '#fff' }, onclick: () => { DB.downloadCopy(); App.setState({ busy: 'Downloaded — now save it into your OneDrive SpellQuest/data folder.' }); setTimeout(() => App.setState({ busy: '' }), 4000); } }, ['⬆ Export progress']),
+          E('label', { class: 'admin-btn', style: { background: '#fff', border: '1px solid #CBD5E1', cursor: 'pointer' } }, [
+            '⬇ Import progress',
+            E('input', { type: 'file', accept: '.sqlite,.db,application/x-sqlite3', style: { display: 'none' },
+              onchange: async e => {
+                const file = e.target.files[0]; if (!file) return;
+                if (!confirm('Importing will REPLACE all progress currently on this device with the file you picked. Continue?')) { e.target.value = ''; return; }
+                App.setState({ busy: 'Importing…' });
+                const buf = await file.arrayBuffer();
+                await DB.importBytes(new Uint8Array(buf));
+                await Model.load();
+                App.setState({ busy: 'Imported ✓', ready: true, screen: 'admin', adminUnitId: Model.data.settings.current_unit });
+                setTimeout(() => App.setState({ busy: '' }), 2000);
+              } }),
+          ]),
+        ]),
+        E('div', { class: 'admin-note' }, ['Last saved on this device: ' + (App.state.lastSaved || 'never') + '.']),
+
+        label('Advanced: direct folder access (desktop browsers only)'),
+        E('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, [
+          E('button', { class: 'admin-btn', style: { background: '#fff', border: '1px solid #CBD5E1' }, onclick: async () => { const ok = await DB.requestFolderAccess(); App.setState({ busy: ok ? 'Folder access granted ✓' : 'Folder access not granted.' }); setTimeout(() => App.setState({ busy: '' }), 2200); await App.persist(); } }, ['Grant folder access']),
+        ]),
+        E('div', { class: 'admin-note' }, ['Optional, laptop/Chrome/Edge only: once granted, this device also writes straight into data/spellquest.sqlite in this folder on every save, skipping the manual Export step (Import on other devices still works the same way).']),
+
+        label('Reports'),
+        E('button', { class: 'admin-btn', style: { background: '#fff', border: '1px solid #CBD5E1' }, onclick: () => App.setState({ screen: 'report', unitId: au }) }, ['Open ' + Model.unit(au).name + ' report']),
+
+        label('Danger zone'),
+        E('button', { class: 'admin-btn', style: { background: '#FEF2F2', color: 'var(--coral)', border: '1px solid #FECACA' }, onclick: () => App.resetAll() }, ['Reset all progress & content']),
+      ]),
+    ]);
+  }
+
+  /* ---------- shell + render ---------- */
+  function confettiLayer() {
+    const cols = ['var(--blue)', 'var(--green)', 'var(--yellow)', 'var(--coral)', 'var(--violet)'];
+    const parts = [];
+    for (let i = 0; i < App.state.confetti; i++) {
+      const left = Math.random() * 100, dur = 1.8 + Math.random() * 1.2, delay = Math.random() * 0.5, sz = 7 + Math.random() * 8;
+      parts.push(E('div', { class: 'confetti-piece', style: { left: left + '%', width: sz + 'px', height: (sz * 1.4) + 'px', background: cols[i % cols.length], animationDuration: dur + 's', animationDelay: delay + 's' } }));
+    }
+    return E('div', { class: 'confetti-layer' }, parts);
+  }
+
+  function tabBar(active) {
+    const items = [['map', 'home', 'Home'], ['garage', 'garage', 'Garage'], ['report', 'doc', 'Report'], ['admin', 'admin', 'Parent']];
+    const go = k => {
+      if (k === 'report') App.setState({ screen: 'report', unitId: Model.data.settings.current_unit });
+      else if (k === 'admin') App.setState({ screen: 'admin', adminUnitId: Model.data.settings.current_unit });
+      else App.setState({ screen: k });
+    };
+    return E('div', { class: 'tabbar' }, items.map(([k, ic, label]) =>
+      E('button', { class: 'tab' + (active === k ? ' active' : ''), onclick: () => go(k) }, [icon(ic, { size: 24 }), E('div', { class: 'tab-label' }, [label])])));
+  }
+
+  function render() {
+    const root = document.getElementById('root');
+    root.innerHTML = '';
+    if (!App.state.ready) {
+      root.appendChild(shell(E('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '70vh', gap: '16px' } }, [
+        E('div', { class: 'spinner' }), E('div', { style: { color: 'var(--muted)', fontWeight: 600 } }, ['Loading SpellQuest…']),
+      ])));
+      return;
+    }
+    let body;
+    switch (App.state.screen) {
+      case 'map': body = viewMap(); break;
+      case 'levelpath': body = viewLevelPath(); break;
+      case 'game': body = viewGame(); break;
+      case 'testcomplete': body = viewTestComplete(); break;
+      case 'levelcomplete': body = viewLevelComplete(); break;
+      case 'unitcomplete': body = viewUnitComplete(); break;
+      case 'garage': body = viewGarage(); break;
+      case 'admin': body = viewAdmin(); break;
+      case 'report': body = viewReport(); break;
+      default: body = viewMap();
+    }
+    root.appendChild(shell(body));
+  }
+
+  function shell(body) {
+    const sc = App.state.screen;
+    const showTab = ['map', 'garage', 'report'].indexOf(sc) >= 0;
+    const noDeco = sc === 'admin';
+    const bg = noDeco ? null : E('div', { class: 'shell-bg' }, [
+      E('div', { style: { position: 'absolute', left: '-40px', top: '-30px', width: '160px', height: '160px', borderRadius: '50%', background: 'rgba(34,197,94,.18)', filter: 'blur(30px)' } }),
+      E('div', { style: { position: 'absolute', right: '-24px', top: '26px', width: '130px', height: '130px', borderRadius: '50%', background: 'rgba(251,113,133,.18)', filter: 'blur(28px)' } }),
+      E('div', { style: { position: 'absolute', right: '70px', top: '-24px', width: '96px', height: '96px', borderRadius: '50%', background: 'rgba(250,204,21,.2)', filter: 'blur(24px)' } }),
+    ]);
+    const s = E('div', { class: 'shell' }, [bg, E('div', { class: 'shell-content' }, [body]), showTab ? tabBar(sc) : null,
+      App.state.confetti ? confettiLayer() : null, App.state.busy ? E('div', { class: 'busy-bar' }, [App.state.busy]) : null]);
+    return s;
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    App.init().then(() => {
+      if (window.SPELLQUEST_START_SCREEN === 'admin') {
+        App.setState({ screen: 'admin', adminUnitId: Model.data.settings.current_unit });
+      }
+    });
+  });
+  window.SpellQuestApp = App; window.SpellQuestModel = Model;
+})();

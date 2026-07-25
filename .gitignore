@@ -1,0 +1,5 @@
+data/*.sqlite
+data/*.db
+reports/report-*.html
+node_modules/
+.DS_Store
