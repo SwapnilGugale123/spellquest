@@ -43,17 +43,24 @@ const Engine = (() => {
   // Build one test: 5-10 words (default from settings), weighted toward
   // words with more incorrect attempts, minimum-exposure respected because
   // mastery itself requires 3 correct attempts (>= 3 exposures).
+  //
+  // For a small/shrinking pool (e.g. a deliberately small unit, or the last
+  // few stragglers of a larger one), the test shrinks to the pool itself
+  // instead of padding out to the full words_per_test with repeats — a
+  // 4-word unit gets 4-word tests, not 5-word tests that repeat one word.
+  // Never shrinks below 3 words (or the whole pool, if under 3) so a test
+  // still feels substantial rather than one-word trivial.
   function buildTest(model, unitId, level) {
-    const N = model.settings.words_per_test || 5;
+    const configured = model.settings.words_per_test || 5;
     const candidates = pool(model, unitId, level);
+    const N = Math.min(configured, Math.max(3, candidates.length));
     const items = []; const avail = candidates.slice();
     while (items.length < N && avail.length > 0) {
       const w = weightedPick(model, avail, level);
       items.push(w); avail.splice(avail.indexOf(w), 1);
     }
-    // If the unit has fewer un-mastered words than the test size, allow
-    // repeats (weighted) rather than shrinking the test, but avoid the same
-    // word appearing twice in a row when possible.
+    // Only pad with repeats if the pool itself is smaller than our 3-word
+    // floor (e.g. exactly 1-2 words left to master).
     if (items.length < N && candidates.length > 0) {
       while (items.length < N) {
         let w = weightedPick(model, candidates, level);

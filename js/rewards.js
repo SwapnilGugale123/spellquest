@@ -14,9 +14,12 @@ const Rewards = (() => {
     { type: 'police_car',   name: 'Police Car',      color: '#1E3A8A', sound: 'siren' },
   ];
 
-  function vehicleForUnit(orderIndex) {
-    const v = CATALOG[(orderIndex - 1) % CATALOG.length];
-    return { id: orderIndex, name: v.name, type: v.type, part_count: 6, color: v.color, sound: v.sound };
+  // catalogIndex picks which vehicle look/type to use (wraps around so it
+  // never runs out); id is caller-assigned and stable regardless of
+  // reordering units later.
+  function vehicleForUnit(id, catalogIndex) {
+    const v = CATALOG[((catalogIndex || 1) - 1) % CATALOG.length];
+    return { id, name: v.name, type: v.type, part_count: 6, color: v.color, sound: v.sound };
   }
 
   function reward(model, unitId) {

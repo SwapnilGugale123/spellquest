@@ -76,7 +76,7 @@
           { id: 3, name: 'Unit 3', order_index: 3, vehicle_id: 3, is_unlocked: 1 },
           { id: 4, name: 'Unit 4', order_index: 4, vehicle_id: 4, is_unlocked: 0 },
         ],
-        vehicles: [1, 2, 3, 4].map(i => Rewards.vehicleForUnit(i)),
+        vehicles: [1, 2, 3, 4].map(i => Rewards.vehicleForUnit(i, i)),
         words: [
           ...words(1, ['Cat', 'Dog', 'Sun', 'Red', 'Box', 'Egg', 'Ball', 'Fish', 'Milk', 'Star', 'Rain', 'Tree'], 101),
           ...words(2, ['Ring', 'Pink', 'Gift', 'Corn', 'Long', 'Pond', 'Circle', 'Fifteen', 'Eighteen', 'Twenty', 'Nose', 'Tongue'], 201),
@@ -136,6 +136,85 @@
       if (done) return 'complete';
       if (!this.unit(unitId).is_unlocked) return 'locked';
       return 'current';
+    },
+
+    orderedUnits() { return [...this.data.units].sort((a, b) => a.order_index - b.order_index); },
+
+    // Renumbers order_index to a clean 1..N sequence matching each unit's
+    // current relative order — call after any insert/reorder so the
+    // "unlock unit at order_index+1" logic in completeLevel() never sees
+    // gaps or duplicate positions.
+    renumberUnits() {
+      this.orderedUnits().forEach((u, i) => { u.order_index = i + 1; });
+    },
+
+    // Inserts a brand-new empty unit immediately after `afterUnitId` (or at
+    // the very start if null), shifting every later unit's order_index down
+    // the list. Returns the new unit.
+    insertUnitAfter(afterUnitId, name) {
+      const ordered = this.orderedUnits();
+      const afterIdx = afterUnitId ? ordered.findIndex(u => u.id === afterUnitId) : -1;
+      const id = this._uid();
+      const vehicleCatalogSlot = this.data.units.length + 1;
+      this.data.vehicles.push(Rewards.vehicleForUnit(id, vehicleCatalogSlot));
+      const newUnit = { id, name, order_index: 0, vehicle_id: id, is_unlocked: 0 };
+      ordered.splice(afterIdx + 1, 0, newUnit);
+      this.data.units.push(newUnit);
+      ordered.forEach((u, i) => { u.order_index = i + 1; });
+      this.data.rewards.push({ id: this._uid(), unit_id: id, parts_unlocked: 0, vehicle_complete: 0 });
+      return newUnit;
+    },
+
+    renameUnit(unitId, name) {
+      name = (name || '').trim(); if (!name) return;
+      this.unit(unitId).name = name;
+    },
+
+    // Swaps this unit with its immediate neighbor in play order. Does not
+    // touch is_unlocked/progress — those stay keyed to unit_id, so a unit's
+    // completion status travels with it, only its position in the map moves.
+    reorderUnit(unitId, direction) {
+      const ordered = this.orderedUnits();
+      const idx = ordered.findIndex(u => u.id === unitId);
+      const swapIdx = idx + direction;
+      if (swapIdx < 0 || swapIdx >= ordered.length) return;
+      const a = ordered[idx], b = ordered[swapIdx];
+      const tmp = a.order_index; a.order_index = b.order_index; b.order_index = tmp;
+    },
+
+    // Moves a word to a different unit. Per-word stats (word_stats) are
+    // keyed by word_id, not unit_id, so mastery/exposure progress on that
+    // word simply carries over to its new unit unchanged.
+    moveWordToUnit(wordId, targetUnitId) {
+      const w = this.wordById(wordId); if (!w) return;
+      w.unit_id = targetUnitId;
+      w.order_index = this.wordsOf(targetUnitId).length - 1;
+    },
+
+    // Splits a unit's words evenly across `count` new units inserted
+    // immediately after it (so a 12-word unit becomes e.g. three 4-word
+    // units in sequence). The original unit keeps its first share and name;
+    // new units are named "<original name> (2)", "(3)", etc.
+    splitUnit(unitId, count) {
+      const words = this.wordsOf(unitId);
+      if (count < 2 || words.length < count) return [];
+      const perGroup = Math.ceil(words.length / count);
+      const original = this.unit(unitId);
+      const created = [];
+      let afterId = unitId;
+      for (let g = 1; g < count; g++) {
+        const nu = this.insertUnitAfter(afterId, `${original.name} (${g + 1})`);
+        created.push(nu);
+        afterId = nu.id;
+      }
+      // Walk groups from the LAST group backward so each slice's words are
+      // moved out of the original before the next slice is computed —
+      // otherwise wordsOf(unitId) shrinks out from under the indices.
+      for (let g = count - 1; g >= 1; g--) {
+        const slice = words.slice(g * perGroup, (g + 1) * perGroup);
+        slice.forEach(w => this.moveWordToUnit(w.id, created[g - 1].id));
+      }
+      return created;
     },
   };
 
@@ -352,13 +431,32 @@
       Model.data.word_stats = Model.data.word_stats.filter(s => s.word_id !== id);
       this.persist(); render();
     },
-    addUnit(name) {
+    addUnit(name, afterUnitId) {
       name = (name || '').trim(); if (!name) return;
-      const ord = Model.data.units.length + 1; const id = Model._uid();
-      Model.data.vehicles.push(Rewards.vehicleForUnit(ord));
-      Model.data.units.push({ id, name, order_index: ord, vehicle_id: ord, is_unlocked: 0 });
-      Model.data.rewards.push({ id: Model._uid(), unit_id: id, parts_unlocked: 0, vehicle_complete: 0 });
-      this.persist(); this.setState({ adminUnitId: id });
+      const lastId = Model.orderedUnits().slice(-1)[0]?.id ?? null;
+      const nu = Model.insertUnitAfter(afterUnitId !== undefined ? afterUnitId : lastId, name);
+      this.persist(); this.setState({ adminUnitId: nu.id });
+    },
+    insertUnitAfter(afterUnitId) {
+      const nu = Model.insertUnitAfter(afterUnitId, 'New unit');
+      this.persist(); this.setState({ adminUnitId: nu.id });
+    },
+    renameUnit(unitId, name) {
+      Model.renameUnit(unitId, name);
+      this.persist(); render();
+    },
+    reorderUnit(unitId, direction) {
+      Model.reorderUnit(unitId, direction);
+      this.persist(); render();
+    },
+    moveWordToUnit(wordId, targetUnitId) {
+      Model.moveWordToUnit(wordId, targetUnitId);
+      this.persist(); render();
+    },
+    splitUnit(unitId, count) {
+      const created = Model.splitUnit(unitId, count);
+      if (!created.length) return;
+      this.persist(); this.setState({ adminUnitId: unitId });
     },
     resetAll() {
       if (!confirm('Reset ALL progress and content back to the seed data?')) return;
@@ -728,22 +826,55 @@
     URL.revokeObjectURL(url);
   }
 
+  // Inline "Split into N" control shown next to units with enough words to
+  // usefully split (used from the units list — see splitControl(u) below).
+  function splitControl(u) {
+    const count = Model.wordsOf(u.id).length;
+    const maxSplit = Math.min(4, count);
+    const select = E('select', { class: 'admin-input', style: { flex: '0 0 auto', width: 'auto', padding: '6px 8px', fontSize: '12px' } },
+      Array.from({ length: maxSplit - 1 }, (_, i) => i + 2).map(n => E('option', { value: String(n) }, ['Split into ' + n])));
+    return E('div', { style: { display: 'flex', gap: '4px' } }, [
+      select,
+      E('button', { class: 'pill-btn', style: { background: '#FFF7ED', color: 'var(--amber-dk)' }, onclick: () => {
+        const n = +select.value;
+        if (!confirm(`Split "${u.name}" (${count} words) into ${n} smaller units? Word progress carries over; this can't be auto-undone.`)) return;
+        App.splitUnit(u.id, n);
+      } }, ['Split']),
+    ]);
+  }
+
   function viewAdmin() {
     const au = App.state.adminUnitId || Model.data.units[0].id;
-    const unitRows = Model.data.units.map(u => {
+    const orderedUnits = Model.orderedUnits();
+    const unitRows = orderedUnits.map((u, i) => {
       const cur = Model.data.settings.current_unit === u.id; const st = Model.unitStatus(u.id);
-      return E('div', { class: 'admin-row' + (App.state.adminUnitId === u.id ? ' current' : '') }, [
-        E('button', { style: { flex: 1, textAlign: 'left', fontWeight: cur ? 700 : 500, fontSize: '14px' }, onclick: () => App.setState({ adminUnitId: u.id }) },
-          [u.name + ' · ' + Model.wordsOf(u.id).length + ' words' + (cur ? '  ◀ current' : '') + (st === 'complete' ? '  ✓' : '')]),
+      const nameInput = E('input', { class: 'admin-input', style: { fontWeight: cur ? 700 : 500, fontSize: '14px', padding: '6px 8px' }, value: u.name,
+        onchange: e => App.renameUnit(u.id, e.target.value),
+        onkeydown: e => { if (e.key === 'Enter') e.target.blur(); } });
+      return E('div', { class: 'admin-row' + (App.state.adminUnitId === u.id ? ' current' : ''), style: { flexWrap: 'wrap', gap: '6px' } }, [
+        E('div', { style: { display: 'flex', flexDirection: 'column', gap: '2px' } }, [
+          E('button', { class: 'pill-btn', style: { background: 'transparent', padding: '2px', opacity: i === 0 ? .3 : 1 }, disabled: i === 0, onclick: () => App.reorderUnit(u.id, -1) }, ['▲']),
+          E('button', { class: 'pill-btn', style: { background: 'transparent', padding: '2px', opacity: i === orderedUnits.length - 1 ? .3 : 1 }, disabled: i === orderedUnits.length - 1, onclick: () => App.reorderUnit(u.id, 1) }, ['▼']),
+        ]),
+        E('button', { style: { flex: 0, background: 'transparent' }, onclick: () => App.setState({ adminUnitId: u.id }) }, [icon('play', { size: 14, color: App.state.adminUnitId === u.id ? 'var(--blue)' : 'var(--muted)' })]),
+        E('div', { style: { flex: 1, minWidth: '120px' } }, [nameInput]),
+        E('div', { style: { fontSize: '12px', color: 'var(--muted)', whiteSpace: 'nowrap' } }, [Model.wordsOf(u.id).length + ' words' + (cur ? ' · current' : '') + (st === 'complete' ? ' · ✓' : '')]),
         E('button', { class: 'pill-btn', style: { background: '#EFF6FF', color: 'var(--blue-dk)' }, onclick: () => App.setCurrentUnit(u.id) }, ['Set current']),
         E('button', { class: 'pill-btn', style: { background: '#ECFDF5', color: 'var(--green)' }, onclick: () => App.markUnitComplete(u.id) }, ['Mark done']),
+        E('button', { class: 'pill-btn', style: { background: '#F5F3FF', color: 'var(--violet-dk)' }, onclick: () => App.insertUnitAfter(u.id) }, ['+ Insert unit after']),
+        Model.wordsOf(u.id).length >= 6 ? splitControl(u) : null,
       ]);
     });
     let newWordVal = '', newUnitVal = '';
+    const otherUnits = () => Model.orderedUnits().filter(u => u.id !== au);
     const words = Model.wordsOf(au).map(w => E('div', { class: 'admin-row' }, [
       E('div', { style: { flex: 1, fontSize: '14px', fontWeight: 600 } }, [w.text]),
       E('button', { class: 'pill-btn', style: { background: '#F1F5F9' }, onclick: () => Audio2.speak(w.text) }, ['▶ audio']),
-      E('div', { style: { fontSize: '11px', color: 'var(--muted)', fontFamily: 'monospace' } }, [w.image_path.split('/').pop()]),
+      E('select', { class: 'admin-input', style: { flex: '0 0 auto', width: 'auto', padding: '6px 8px', fontSize: '12px' },
+        onchange: e => { const target = +e.target.value; if (target) App.moveWordToUnit(w.id, target); e.target.value = ''; } }, [
+        E('option', { value: '' }, ['Move to…']),
+        ...otherUnits().map(u => E('option', { value: String(u.id) }, [u.name])),
+      ]),
       E('button', { class: 'pill-btn', style: { background: '#FEF2F2', color: 'var(--coral)', fontWeight: 700 }, onclick: () => App.removeWord(w.id) }, ['✕']),
     ]));
     const label = t => E('div', { class: 'admin-label' }, [t]);
@@ -759,10 +890,13 @@
       ]),
       E('div', { class: 'admin-body' }, [
         label('Units'),
+        E('div', { class: 'admin-note', style: { marginTop: 0, marginBottom: '8px' } }, [
+          'Units play in the order shown (▲▼ to reorder). If a unit has too many words and your child is taking a long time to finish it, use "Split" to break it into smaller units automatically, or move individual words below.',
+        ]),
         E('div', { class: 'admin-list' }, unitRows),
         E('div', { style: { display: 'flex', gap: '8px', marginTop: '10px' } }, [
           newUnitInput,
-          E('button', { class: 'admin-btn', style: { background: 'var(--blue)', color: '#fff' }, onclick: () => App.addUnit(newUnitInput.value) }, ['Add unit']),
+          E('button', { class: 'admin-btn', style: { background: 'var(--blue)', color: '#fff' }, onclick: () => App.addUnit(newUnitInput.value) }, ['Add unit at end']),
         ]),
         label('Words in ' + Model.unit(au).name),
         E('div', { class: 'admin-list' }, words.length ? words : [E('div', { style: { padding: '12px', color: 'var(--muted)', fontSize: '14px' } }, ['No words yet.'])]),
