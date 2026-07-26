@@ -59,6 +59,16 @@
       const maxId = Math.max(1000, ...['units', 'words', 'unit_words', 'vehicles', 'level_progress', 'word_stats', 'test_log', 'rewards']
         .flatMap(t => this.data[t].map(r => r.id || 0)));
       this._idCounter = maxId;
+      // A device that already had progress before the numbers/colors/
+      // animals/etc. content bank existed never gets a fresh seed() run
+      // (seed() only fires for a brand-new empty database), so that bank
+      // has to be back-filled onto existing saves once, here. Existing
+      // units/words/progress are completely untouched.
+      if (!this.data.settings.content_library_v1) {
+        seedContentLibrary(this);
+        this.data.settings.content_library_v1 = 1;
+        await this.persist();
+      }
     },
 
     seed() {
