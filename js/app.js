@@ -1177,6 +1177,22 @@
         label('Reports'),
         E('button', { class: 'admin-btn', style: { background: '#fff', border: '1px solid #CBD5E1' }, onclick: () => App.setState({ screen: 'report', unitId: au }) }, ['Open ' + Model.unit(au).name + ' report']),
 
+        label('App updates'),
+        E('div', { class: 'admin-note', style: { marginTop: 0, marginBottom: '8px' } }, [
+          'This device caches the app for offline use, so new words/units/fixes don’t always show up right away. Needs internet once to fetch the update.',
+        ]),
+        E('button', { class: 'admin-btn', style: { background: '#fff', border: '1px solid #CBD5E1' }, onclick: async () => {
+          App.setState({ busy: 'Checking for updates…' });
+          try {
+            if ('serviceWorker' in navigator) {
+              const regs = await navigator.serviceWorker.getRegistrations();
+              await Promise.all(regs.map(r => r.unregister()));
+            }
+            if (window.caches) { const keys = await caches.keys(); await Promise.all(keys.map(k => caches.delete(k))); }
+          } catch (e) { /* best-effort */ }
+          window.location.reload(true);
+        } }, ['Check for updates now']),
+
         label('Danger zone'),
         E('button', { class: 'admin-btn', style: { background: '#FEF2F2', color: 'var(--coral)', border: '1px solid #FECACA' }, onclick: () => App.resetAll() }, ['Reset all progress & content']),
       ]),

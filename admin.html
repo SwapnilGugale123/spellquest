@@ -22,8 +22,20 @@
 <script src="js/illustrations.js"></script>
 <script src="js/app.js"></script>
 <script>
+  // See index.html for why this reloads on update rather than just registering.
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+    window.addEventListener('load', async () => {
+      try {
+        const reg = await navigator.serviceWorker.register('sw.js');
+        reg.update().catch(() => {});
+        let reloaded = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (reloaded) return;
+          reloaded = true;
+          window.location.reload();
+        });
+      } catch (e) { /* offline-first app: registration failure isn't fatal */ }
+    });
   }
 </script>
 </body>

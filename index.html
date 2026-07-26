@@ -26,8 +26,23 @@
 <script src="js/illustrations.js"></script>
 <script src="js/app.js"></script>
 <script>
+  // Registers the service worker and, when a NEW version has taken over
+  // (e.g. after visiting once while online, following a content update),
+  // reloads automatically so the update is visible right away instead of
+  // silently waiting in the background until the next manual refresh.
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+    window.addEventListener('load', async () => {
+      try {
+        const reg = await navigator.serviceWorker.register('sw.js');
+        reg.update().catch(() => {});
+        let reloaded = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (reloaded) return;
+          reloaded = true;
+          window.location.reload();
+        });
+      } catch (e) { /* offline-first app: registration failure isn't fatal */ }
+    });
   }
 </script>
 </body>
