@@ -59,8 +59,21 @@ const Audio2 = (() => {
 
   // Resolves once the pronunciation has actually finished playing (not just
   // started) so callers can reliably sequence something after it — e.g. a
-  // pause before advancing to the next word.
-  async function speak(word) {
+  // pause before advancing to the next word. `overrideDataUrl`, if given
+  // (an admin-uploaded audio override stored in the DB), takes precedence
+  // over both the assets/words/ file and system TTS.
+  async function speak(word, overrideDataUrl) {
+    if (overrideDataUrl) {
+      try {
+        const a = new Audio(overrideDataUrl);
+        await a.play();
+        await new Promise(resolve => {
+          a.addEventListener('ended', resolve, { once: true });
+          a.addEventListener('error', resolve, { once: true });
+        });
+        return;
+      } catch (e) { /* fall through */ }
+    }
     const fileAudio = await tryFileAudio(word);
     if (fileAudio) {
       try {

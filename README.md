@@ -59,15 +59,37 @@ not the child-facing screens, so nothing gets overwritten by accident.
   built-in illustration / system voice for any word
 - `reports/` — saved end-of-unit reports land here
 
+## Word repository (content management)
+
+Words are stored once in a shared repository and then *placed* into one or
+more units — the same word (e.g. a color, a number) can appear in several
+units without being duplicated, and its picture/audio only needs fixing
+once no matter how many units it's in. In Parent Admin:
+
+- **Words in [unit]** — each row shows if that word is also placed
+  elsewhere ("also in: …"), lets you move it to a different unit, or add it
+  to another unit as well (checkboxes/picker), or remove it from just this
+  unit (its other placements are untouched).
+- **Word Repository** (further down) — search every word regardless of
+  unit, assign it to a unit, or delete it everywhere.
+- **Image** button on any word row — upload a photo/picture from your
+  device to replace the built-in illustration for that word, instantly,
+  no code changes. "Reset img" reverts to the built-in one.
+
+Per-word progress (mastery, exposure count) is tracked separately for each
+unit a word is placed in — mastering "red" in one unit doesn't skip it in
+another.
+
 ## Audio & images
 
 Word pronunciation currently uses the best-sounding voice available in the
-browser (falls back gracefully across devices). Word images use hand-drawn
-flat SVG illustrations for the seeded word list, with a labeled placeholder
-for any new word added via Admin. Both are designed to be swapped for real
-premium-TTS MP3s / custom art later — just drop matching files into
-`assets/words/<word>.mp3` and `<word>.png` and the app will prefer them
-automatically, with zero code changes.
+browser (falls back gracefully across devices), or a real MP3 generated via
+`scripts/generate-audio.js` (see script header — reads an ElevenLabs API key
+from an environment variable, never hardcoded). Word images use hand-drawn
+flat SVG illustrations for the built-in word list, with a labeled
+placeholder for any new word — override either per-word directly in Admin
+(see above), or by dropping `assets/words/<word>.mp3` / `<word>.png` files
+into place, which the app prefers automatically.
 
 ## Updating the app itself (code changes, not progress)
 

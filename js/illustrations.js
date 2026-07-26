@@ -12,7 +12,9 @@ const Illustrations = (() => {
   }
   const C = { sky: '#DBEAFE', grass: '#BBF7D0', sun: '#FACC15', line: '#1E293B', red: '#FB7185',
     blue: '#3B82F6', brown: '#B45309', tan: '#FDE68A', white: '#FFFFFF', green: '#22C55E',
-    violet: '#A78BFA', gray: '#94A3B8', black: '#1E293B', pink: '#F9A8D4', orange: '#FB923C' };
+    violet: '#A78BFA', gray: '#94A3B8', black: '#1E293B', pink: '#F9A8D4', orange: '#FB923C',
+    purple: '#9333EA', grey: '#9CA3AF', gold: '#D4AF37', darkBrown: '#78350F', cream: '#FEF3C7',
+    navy: '#1E3A8A', wood: '#C08552', coral: '#FB7185' };
 
   const ICONS = {
     cat: () => svgWrap([
@@ -252,6 +254,364 @@ const Illustrations = (() => {
       el('path', { d: 'M34 30 H86 V56 Q86 96 60 96 Q34 96 34 56 Z', fill: C.pink }),
       el('path', { d: 'M60 56 V90', stroke: '#F472B6', 'stroke-width': 3 }),
       el('rect', { x: 34, y: 30, width: 52, height: 14, fill: C.white, stroke: C.gray, 'stroke-width': 2 }),
+    ]),
+
+    /* ---- numbers 11-40 ---- */
+    eleven: () => textIcon('11'),
+    twelve: () => textIcon('12'),
+    thirteen: () => textIcon('13'),
+    fourteen: () => textIcon('14'),
+    sixteen: () => textIcon('16'),
+    seventeen: () => textIcon('17'),
+    nineteen: () => textIcon('19'),
+    forty: () => textIcon('40'),
+
+    /* ---- colors ---- */
+    orange: () => svgWrap([el('circle', { cx: 60, cy: 60, r: 40, fill: C.orange })]),
+    purple: () => svgWrap([el('circle', { cx: 60, cy: 60, r: 40, fill: C.purple })]),
+    brown: () => svgWrap([el('circle', { cx: 60, cy: 60, r: 40, fill: C.brown })]),
+    grey: () => svgWrap([el('circle', { cx: 60, cy: 60, r: 40, fill: C.grey })]),
+    gold: () => svgWrap([el('circle', { cx: 60, cy: 60, r: 40, fill: C.gold })]),
+
+    /* ---- home objects ---- */
+    door: () => svgWrap([
+      el('rect', { x: 34, y: 16, width: 52, height: 92, rx: 4, fill: C.wood }),
+      el('rect', { x: 40, y: 22, width: 40, height: 80, rx: 3, fill: '#D8A868' }),
+      el('circle', { cx: 72, cy: 62, r: 3.5, fill: C.gold }),
+    ]),
+    window: () => svgWrap([
+      el('rect', { x: 20, y: 20, width: 80, height: 80, rx: 6, fill: C.sky, stroke: C.wood, 'stroke-width': 6 }),
+      el('rect', { x: 56, y: 20, width: 8, height: 80, fill: C.wood }),
+      el('rect', { x: 20, y: 56, width: 80, height: 8, fill: C.wood }),
+    ]),
+    table: () => svgWrap([
+      el('rect', { x: 16, y: 46, width: 88, height: 12, fill: C.wood }),
+      el('rect', { x: 24, y: 58, width: 8, height: 40, fill: C.brown }),
+      el('rect', { x: 88, y: 58, width: 8, height: 40, fill: C.brown }),
+    ]),
+    chair: () => svgWrap([
+      el('rect', { x: 34, y: 20, width: 44, height: 10, fill: C.wood }),
+      el('rect', { x: 34, y: 20, width: 10, height: 60, fill: C.wood }),
+      el('rect', { x: 30, y: 56, width: 52, height: 10, fill: C.wood }),
+      el('rect', { x: 34, y: 66, width: 8, height: 34, fill: C.brown }),
+      el('rect', { x: 74, y: 66, width: 8, height: 34, fill: C.brown }),
+    ]),
+    bed: () => svgWrap([
+      el('rect', { x: 16, y: 60, width: 88, height: 30, rx: 4, fill: C.blue }),
+      el('rect', { x: 16, y: 50, width: 22, height: 18, rx: 4, fill: C.white, stroke: C.gray, 'stroke-width': 2 }),
+      el('rect', { x: 16, y: 90, width: 8, height: 14, fill: C.wood }),
+      el('rect', { x: 96, y: 90, width: 8, height: 14, fill: C.wood }),
+    ]),
+    lamp: () => svgWrap([
+      el('path', { d: 'M40 20 L80 20 L92 56 L28 56 Z', fill: C.sun }),
+      el('rect', { x: 56, y: 56, width: 8, height: 38, fill: C.grey }),
+      el('rect', { x: 46, y: 94, width: 28, height: 8, fill: C.grey }),
+    ]),
+    clock: () => svgWrap([
+      el('circle', { cx: 60, cy: 60, r: 40, fill: C.white, stroke: C.black, 'stroke-width': 4 }),
+      el('line', { x1: 60, y1: 60, x2: 60, y2: 36, stroke: C.black, 'stroke-width': 4, 'stroke-linecap': 'round' }),
+      el('line', { x1: 60, y1: 60, x2: 78, y2: 66, stroke: C.black, 'stroke-width': 4, 'stroke-linecap': 'round' }),
+      el('circle', { cx: 60, cy: 60, r: 4, fill: C.red }),
+    ]),
+    mirror: () => svgWrap([
+      el('ellipse', { cx: 60, cy: 52, rx: 30, ry: 38, fill: C.sky, stroke: C.gold, 'stroke-width': 6 }),
+      el('rect', { x: 55, y: 88, width: 10, height: 20, fill: C.gold }),
+    ]),
+    key: () => svgWrap([
+      el('circle', { cx: 40, cy: 50, r: 16, fill: 'none', stroke: C.gold, 'stroke-width': 8 }),
+      el('rect', { x: 52, y: 46, width: 44, height: 8, fill: C.gold }),
+      el('rect', { x: 80, y: 54, width: 8, height: 12, fill: C.gold }),
+      el('rect', { x: 92, y: 54, width: 8, height: 16, fill: C.gold }),
+    ]),
+    roof: () => svgWrap([el('polygon', { points: '60,20 104,64 16,64', fill: C.red })]),
+    wall: () => svgWrap([
+      ...[0, 1, 2].flatMap(row => [0, 1].map(col => el('rect', {
+        x: 16 + col * 46 + (row % 2 ? 23 : 0), y: 20 + row * 28, width: row % 2 && (col === 1) ? 23 : 46, height: 24,
+        fill: row % 2 === 0 ? C.brown : C.wood, stroke: C.tan, 'stroke-width': 2,
+      }))),
+    ]),
+    floor: () => svgWrap([
+      ...[0, 1, 2, 3].map(i => el('rect', { x: 10, y: 20 + i * 20, width: 100, height: 18, fill: i % 2 ? C.wood : '#D8A868', stroke: C.brown, 'stroke-width': 1 })),
+    ]),
+    stairs: () => svgWrap([
+      el('polygon', { points: '20,100 20,80 40,80 40,60 60,60 60,40 80,40 80,20 100,20 100,100', fill: C.grey }),
+    ]),
+    kitchen: () => svgWrap([
+      el('rect', { x: 16, y: 50, width: 88, height: 40, fill: C.grey }),
+      el('rect', { x: 24, y: 58, width: 24, height: 18, rx: 3, fill: C.sky }),
+      el('circle', { cx: 76, cy: 44, r: 8, fill: C.black }),
+      el('circle', { cx: 92, cy: 44, r: 8, fill: C.black }),
+    ]),
+    sofa: () => svgWrap([
+      el('rect', { x: 18, y: 54, width: 84, height: 32, rx: 10, fill: C.violet }),
+      el('rect', { x: 18, y: 38, width: 20, height: 30, rx: 8, fill: C.violet }),
+      el('rect', { x: 82, y: 38, width: 20, height: 30, rx: 8, fill: C.violet }),
+      el('rect', { x: 22, y: 86, width: 10, height: 12, fill: '#7C3AED' }),
+      el('rect', { x: 88, y: 86, width: 10, height: 12, fill: '#7C3AED' }),
+    ]),
+    pillow: () => svgWrap([el('rect', { x: 24, y: 34, width: 72, height: 52, rx: 20, fill: C.pink })]),
+    blanket: () => svgWrap([
+      el('rect', { x: 16, y: 46, width: 88, height: 44, rx: 8, fill: C.orange }),
+      ...[0, 1, 2].map(i => el('rect', { x: 16, y: 46 + i * 15, width: 88, height: 5, fill: C.cream })),
+    ]),
+    spoon: () => svgWrap([
+      el('ellipse', { cx: 60, cy: 34, rx: 16, ry: 20, fill: C.grey }),
+      el('rect', { x: 56, y: 50, width: 8, height: 52, rx: 4, fill: C.grey }),
+    ]),
+    plate: () => svgWrap([
+      el('circle', { cx: 60, cy: 60, r: 42, fill: C.white, stroke: C.gray, 'stroke-width': 3 }),
+      el('circle', { cx: 60, cy: 60, r: 26, fill: 'none', stroke: C.gray, 'stroke-width': 2 }),
+    ]),
+    cup: () => svgWrap([
+      el('path', { d: 'M32 40 H80 V78 A24 24 0 0 1 32 78 Z', fill: C.sky, stroke: C.blue, 'stroke-width': 3 }),
+      el('path', { d: 'M80 46 Q98 46 98 60 Q98 74 80 72', fill: 'none', stroke: C.blue, 'stroke-width': 4 }),
+    ]),
+
+    /* ---- animals ---- */
+    lion: () => svgWrap([
+      el('circle', { cx: 60, cy: 60, r: 26, fill: C.gold }),
+      ...[0, 45, 90, 135, 180, 225, 270, 315].map(a => el('rect', { x: 56, y: 20, width: 8, height: 22, rx: 4, fill: C.brown, transform: `rotate(${a} 60 60)` })),
+      el('circle', { cx: 52, cy: 56, r: 3, fill: C.black }),
+      el('circle', { cx: 68, cy: 56, r: 3, fill: C.black }),
+      el('ellipse', { cx: 60, cy: 68, rx: 5, ry: 3, fill: C.black }),
+    ]),
+    tiger: () => svgWrap([
+      el('circle', { cx: 60, cy: 60, r: 30, fill: C.orange }),
+      ...[[44, 40], [76, 40], [40, 60], [80, 60], [50, 80], [70, 80]].map(([x, y]) => el('rect', { x: x - 3, y: y - 8, width: 6, height: 16, rx: 3, fill: C.black })),
+      el('circle', { cx: 50, cy: 56, r: 3, fill: C.black }),
+      el('circle', { cx: 70, cy: 56, r: 3, fill: C.black }),
+    ]),
+    elephant: () => svgWrap([
+      el('ellipse', { cx: 55, cy: 60, rx: 34, ry: 28, fill: C.grey }),
+      el('ellipse', { cx: 30, cy: 50, rx: 14, ry: 18, fill: C.grey }),
+      el('path', { d: 'M38 70 Q30 90 40 100', stroke: C.grey, 'stroke-width': 10, fill: 'none', 'stroke-linecap': 'round' }),
+      el('circle', { cx: 62, cy: 52, r: 3, fill: C.black }),
+    ]),
+    bear: () => svgWrap([
+      el('circle', { cx: 44, cy: 34, r: 10, fill: C.brown }),
+      el('circle', { cx: 76, cy: 34, r: 10, fill: C.brown }),
+      el('circle', { cx: 60, cy: 60, r: 32, fill: C.brown }),
+      el('ellipse', { cx: 60, cy: 68, rx: 14, ry: 10, fill: '#D8A868' }),
+      el('circle', { cx: 50, cy: 54, r: 3, fill: C.black }),
+      el('circle', { cx: 70, cy: 54, r: 3, fill: C.black }),
+      el('circle', { cx: 60, cy: 66, r: 3, fill: C.black }),
+    ]),
+    monkey: () => svgWrap([
+      el('circle', { cx: 60, cy: 60, r: 28, fill: C.brown }),
+      el('ellipse', { cx: 60, cy: 66, rx: 18, ry: 14, fill: C.tan }),
+      el('circle', { cx: 34, cy: 46, r: 10, fill: C.brown }),
+      el('circle', { cx: 86, cy: 46, r: 10, fill: C.brown }),
+      el('circle', { cx: 51, cy: 58, r: 3, fill: C.black }),
+      el('circle', { cx: 69, cy: 58, r: 3, fill: C.black }),
+    ]),
+    horse: () => svgWrap([
+      el('ellipse', { cx: 60, cy: 70, rx: 34, ry: 20, fill: C.brown }),
+      el('path', { d: 'M84 60 L100 34 L92 32 L78 54 Z', fill: C.brown }),
+      el('path', { d: 'M80 40 Q92 36 96 42', stroke: C.black, 'stroke-width': 4, fill: 'none', 'stroke-linecap': 'round' }),
+      el('circle', { cx: 92, cy: 40, r: 2.5, fill: C.black }),
+    ]),
+    cow: () => svgWrap([
+      el('ellipse', { cx: 60, cy: 66, rx: 36, ry: 24, fill: C.white, stroke: C.black, 'stroke-width': 2 }),
+      el('circle', { cx: 46, cy: 56, r: 8, fill: C.black }),
+      el('circle', { cx: 78, cy: 74, r: 10, fill: C.black }),
+      el('ellipse', { cx: 60, cy: 46, rx: 10, ry: 8, fill: C.white, stroke: C.black, 'stroke-width': 2 }),
+      el('circle', { cx: 56, cy: 44, r: 2, fill: C.black }),
+      el('circle', { cx: 64, cy: 44, r: 2, fill: C.black }),
+    ]),
+    sheep: () => svgWrap([
+      ...[[46, 50], [60, 44], [74, 50], [50, 62], [70, 62], [60, 56]].map(([x, y]) => el('circle', { cx: x, cy: y, r: 14, fill: C.white, stroke: C.gray, 'stroke-width': 1 })),
+      el('circle', { cx: 60, cy: 78, r: 10, fill: C.black }),
+    ]),
+    goat: () => svgWrap([
+      el('ellipse', { cx: 60, cy: 66, rx: 26, ry: 20, fill: C.white, stroke: C.gray, 'stroke-width': 2 }),
+      el('circle', { cx: 60, cy: 40, r: 14, fill: C.white, stroke: C.gray, 'stroke-width': 2 }),
+      el('path', { d: 'M54 30 Q52 20 56 16 M66 30 Q68 20 64 16', stroke: C.grey, 'stroke-width': 3, fill: 'none' }),
+      el('circle', { cx: 56, cy: 40, r: 2, fill: C.black }),
+      el('circle', { cx: 64, cy: 40, r: 2, fill: C.black }),
+    ]),
+    rabbit: () => svgWrap([
+      el('ellipse', { cx: 60, cy: 74, rx: 22, ry: 18, fill: C.white, stroke: C.gray, 'stroke-width': 2 }),
+      el('circle', { cx: 60, cy: 48, r: 16, fill: C.white, stroke: C.gray, 'stroke-width': 2 }),
+      el('ellipse', { cx: 50, cy: 24, rx: 5, ry: 16, fill: C.white, stroke: C.gray, 'stroke-width': 2 }),
+      el('ellipse', { cx: 66, cy: 24, rx: 5, ry: 16, fill: C.white, stroke: C.gray, 'stroke-width': 2 }),
+      el('circle', { cx: 55, cy: 46, r: 2, fill: C.black }),
+      el('circle', { cx: 65, cy: 46, r: 2, fill: C.black }),
+    ]),
+    duck: () => svgWrap([
+      el('ellipse', { cx: 55, cy: 68, rx: 28, ry: 20, fill: C.sun }),
+      el('circle', { cx: 82, cy: 48, r: 16, fill: C.sun }),
+      el('path', { d: 'M96 48 L108 45 L96 56 Z', fill: C.orange }),
+      el('circle', { cx: 86, cy: 44, r: 2.5, fill: C.black }),
+    ]),
+    hen: () => svgWrap([
+      el('ellipse', { cx: 55, cy: 68, rx: 26, ry: 22, fill: C.white, stroke: C.gray, 'stroke-width': 2 }),
+      el('circle', { cx: 84, cy: 48, r: 14, fill: C.white, stroke: C.gray, 'stroke-width': 2 }),
+      el('path', { d: 'M78 36 Q82 26 90 32', fill: C.red }),
+      el('path', { d: 'M98 48 L108 46 L98 52 Z', fill: C.orange }),
+      el('circle', { cx: 88, cy: 46, r: 2, fill: C.black }),
+    ]),
+    frog: () => svgWrap([
+      el('ellipse', { cx: 60, cy: 72, rx: 30, ry: 20, fill: C.green }),
+      el('circle', { cx: 44, cy: 44, r: 12, fill: C.green }),
+      el('circle', { cx: 76, cy: 44, r: 12, fill: C.green }),
+      el('circle', { cx: 44, cy: 40, r: 5, fill: C.white }), el('circle', { cx: 44, cy: 40, r: 2.5, fill: C.black }),
+      el('circle', { cx: 76, cy: 40, r: 5, fill: C.white }), el('circle', { cx: 76, cy: 40, r: 2.5, fill: C.black }),
+    ]),
+    snake: () => svgWrap([
+      el('path', { d: 'M20 90 Q40 60 20 40 Q0 20 30 20 Q60 20 60 40 Q60 60 90 60 Q100 60 100 50',
+        stroke: C.green, 'stroke-width': 14, fill: 'none', 'stroke-linecap': 'round' }),
+      el('circle', { cx: 98, cy: 50, r: 3, fill: C.black }),
+    ]),
+    deer: () => svgWrap([
+      el('ellipse', { cx: 55, cy: 72, rx: 24, ry: 18, fill: C.tan }),
+      el('circle', { cx: 78, cy: 50, r: 14, fill: C.tan }),
+      el('path', { d: 'M72 38 Q68 26 60 24 M84 38 Q88 26 96 24', stroke: C.brown, 'stroke-width': 3, fill: 'none' }),
+      el('circle', { cx: 82, cy: 46, r: 2, fill: C.black }),
+    ]),
+
+    /* ---- school objects ---- */
+    pencil: () => svgWrap([
+      el('polygon', { points: '30,90 90,30 104,44 44,104', fill: C.sun }),
+      el('polygon', { points: '30,90 44,104 24,110', fill: C.tan }),
+      el('rect', { x: 84, y: 24, width: 20, height: 20, transform: 'rotate(45 94 34)', fill: C.grey }),
+    ]),
+    pen: () => svgWrap([
+      el('rect', { x: 52, y: 20, width: 16, height: 70, rx: 6, fill: C.blue }),
+      el('polygon', { points: '52,90 68,90 60,106', fill: C.black }),
+      el('rect', { x: 55, y: 14, width: 10, height: 12, fill: C.grey }),
+    ]),
+    book: () => svgWrap([
+      el('path', { d: 'M20 26 Q40 18 60 26 V96 Q40 88 20 96 Z', fill: C.blue }),
+      el('path', { d: 'M100 26 Q80 18 60 26 V96 Q80 88 100 96 Z', fill: C.coral }),
+    ]),
+    bag: () => svgWrap([
+      el('rect', { x: 24, y: 44, width: 72, height: 58, rx: 10, fill: C.orange }),
+      el('path', { d: 'M40 44 V30 Q40 18 60 18 Q80 18 80 30 V44', stroke: C.brown, 'stroke-width': 8, fill: 'none' }),
+    ]),
+    eraser: () => svgWrap([
+      el('rect', { x: 24, y: 44, width: 72, height: 32, rx: 8, fill: C.pink }),
+      el('rect', { x: 24, y: 44, width: 24, height: 32, rx: 8, fill: C.white, stroke: C.gray, 'stroke-width': 2 }),
+    ]),
+    ruler: () => svgWrap([
+      el('rect', { x: 14, y: 50, width: 92, height: 20, fill: C.sun }),
+      ...[24, 34, 44, 54, 64, 74, 84, 94].map(x => el('rect', { x, y: 50, width: 2, height: 10, fill: C.black })),
+    ]),
+    chalk: () => svgWrap([
+      el('rect', { x: 30, y: 50, width: 60, height: 16, rx: 8, fill: C.white, stroke: C.gray, 'stroke-width': 2 }),
+    ]),
+    board: () => svgWrap([
+      el('rect', { x: 14, y: 24, width: 92, height: 60, rx: 4, fill: C.green }),
+      el('rect', { x: 14, y: 24, width: 92, height: 60, rx: 4, fill: 'none', stroke: C.wood, 'stroke-width': 6 }),
+      el('path', { d: 'M30 60 H70', stroke: C.white, 'stroke-width': 3 }),
+    ]),
+    desk: () => svgWrap([
+      el('rect', { x: 16, y: 44, width: 88, height: 12, fill: C.wood }),
+      el('rect', { x: 16, y: 56, width: 88, height: 20, fill: '#D8A868' }),
+      el('rect', { x: 22, y: 76, width: 8, height: 24, fill: C.brown }),
+      el('rect', { x: 90, y: 76, width: 8, height: 24, fill: C.brown }),
+    ]),
+    bench: () => svgWrap([
+      el('rect', { x: 14, y: 50, width: 92, height: 10, fill: C.wood }),
+      el('rect', { x: 14, y: 72, width: 92, height: 10, fill: C.wood }),
+      el('rect', { x: 20, y: 60, width: 8, height: 34, fill: C.brown }),
+      el('rect', { x: 92, y: 60, width: 8, height: 34, fill: C.brown }),
+    ]),
+    crayon: () => svgWrap([
+      el('rect', { x: 50, y: 30, width: 20, height: 60, fill: C.red }),
+      el('polygon', { points: '50,30 70,30 60,14', fill: '#E11D62' }),
+    ]),
+    scissors: () => svgWrap([
+      el('circle', { cx: 34, cy: 34, r: 10, fill: 'none', stroke: C.grey, 'stroke-width': 5 }),
+      el('circle', { cx: 34, cy: 86, r: 10, fill: 'none', stroke: C.grey, 'stroke-width': 5 }),
+      el('path', { d: 'M40 40 L96 60 M40 80 L96 60', stroke: C.gray, 'stroke-width': 5, fill: 'none', 'stroke-linecap': 'round' }),
+    ]),
+    glue: () => svgWrap([
+      el('rect', { x: 40, y: 40, width: 40, height: 60, rx: 8, fill: C.violet }),
+      el('rect', { x: 48, y: 24, width: 24, height: 20, rx: 4, fill: C.white, stroke: C.gray, 'stroke-width': 2 }),
+    ]),
+    notebook: () => svgWrap([
+      el('rect', { x: 26, y: 20, width: 68, height: 84, rx: 6, fill: C.white, stroke: C.blue, 'stroke-width': 3 }),
+      ...[0, 1, 2, 3].map(i => el('circle', { cx: 26, cy: 34 + i * 20, r: 4, fill: C.grey })),
+      el('path', { d: 'M40 44 H82 M40 58 H82 M40 72 H82', stroke: C.sky, 'stroke-width': 3 }),
+    ]),
+    sharpener: () => svgWrap([
+      el('rect', { x: 34, y: 40, width: 52, height: 40, rx: 6, fill: C.sun }),
+      el('circle', { cx: 60, cy: 60, r: 10, fill: C.grey }),
+    ]),
+    paint: () => svgWrap([
+      el('path', { d: 'M30 50 Q30 90 60 90 Q90 90 90 50 Z', fill: C.white, stroke: C.gray, 'stroke-width': 2 }),
+      el('circle', { cx: 42, cy: 62, r: 8, fill: C.red }),
+      el('circle', { cx: 60, cy: 70, r: 8, fill: C.blue }),
+      el('circle', { cx: 78, cy: 62, r: 8, fill: C.sun }),
+    ]),
+    brush: () => svgWrap([
+      el('rect', { x: 54, y: 40, width: 12, height: 60, fill: C.wood }),
+      el('path', { d: 'M48 20 Q60 6 72 20 L66 40 H54 Z', fill: C.orange }),
+    ]),
+    uniform: () => svgWrap([
+      el('path', { d: 'M44 20 L60 34 L76 20 L96 34 L86 50 L76 42 V100 H44 V42 L34 50 L24 34 Z', fill: C.navy }),
+      el('path', { d: 'M52 20 L60 34 L68 20', fill: C.white }),
+    ]),
+    lunch: () => svgWrap([
+      el('rect', { x: 26, y: 46, width: 68, height: 50, rx: 8, fill: C.red }),
+      el('path', { d: 'M40 46 V34 Q40 26 60 26 Q80 26 80 34 V46', stroke: C.grey, 'stroke-width': 6, fill: 'none' }),
+    ]),
+    bus: () => svgWrap([
+      el('rect', { x: 12, y: 40, width: 96, height: 40, rx: 8, fill: C.sun }),
+      el('rect', { x: 20, y: 48, width: 20, height: 16, fill: C.sky }),
+      el('rect', { x: 48, y: 48, width: 20, height: 16, fill: C.sky }),
+      el('rect', { x: 76, y: 48, width: 20, height: 16, fill: C.sky }),
+      el('circle', { cx: 34, cy: 84, r: 9, fill: C.black }),
+      el('circle', { cx: 86, cy: 84, r: 9, fill: C.black }),
+    ]),
+
+    /* ---- family members ---- */
+    sister: () => svgWrap([
+      el('circle', { cx: 60, cy: 38, r: 18, fill: C.tan }),
+      el('path', { d: 'M40 36 Q60 12 80 36 L80 48 Q60 40 40 48 Z', fill: '#7C2D12' }),
+      el('path', { d: 'M38 100 Q38 66 60 66 Q82 66 82 100 Z', fill: C.pink }),
+    ]),
+    brother: () => svgWrap([
+      el('circle', { cx: 60, cy: 38, r: 18, fill: C.tan }),
+      el('path', { d: 'M42 34 Q60 20 78 34 L76 28 Q60 22 44 28 Z', fill: '#334155' }),
+      el('path', { d: 'M38 100 Q38 66 60 66 Q82 66 82 100 Z', fill: C.blue }),
+    ]),
+    grandmother: () => svgWrap([
+      el('circle', { cx: 60, cy: 40, r: 18, fill: C.tan }),
+      el('path', { d: 'M40 38 Q60 20 80 38 L80 44 Q60 34 40 44 Z', fill: C.white, stroke: C.gray, 'stroke-width': 2 }),
+      el('path', { d: 'M36 100 Q36 68 60 68 Q84 68 84 100 Z', fill: C.violet }),
+      el('rect', { x: 50, y: 58, width: 20, height: 6, rx: 3, fill: C.gray }),
+    ]),
+    grandfather: () => svgWrap([
+      el('circle', { cx: 60, cy: 40, r: 18, fill: C.tan }),
+      el('path', { d: 'M36 100 Q36 68 60 68 Q84 68 84 100 Z', fill: C.grey }),
+      el('rect', { x: 50, y: 58, width: 20, height: 6, rx: 3, fill: C.white }),
+      el('circle', { cx: 60, cy: 32, r: 16, fill: 'none', stroke: C.white, 'stroke-width': 3 }),
+    ]),
+    uncle: () => svgWrap([
+      el('circle', { cx: 60, cy: 38, r: 18, fill: C.tan }),
+      el('path', { d: 'M42 34 Q60 20 78 34 L76 28 Q60 22 44 28 Z', fill: C.black }),
+      el('path', { d: 'M38 100 Q38 66 60 66 Q82 66 82 100 Z', fill: C.brown }),
+      el('rect', { x: 54, y: 66, width: 12, height: 26, fill: C.red }),
+    ]),
+    aunt: () => svgWrap([
+      el('circle', { cx: 60, cy: 38, r: 18, fill: C.tan }),
+      el('path', { d: 'M40 36 Q60 12 80 36 L80 52 Q60 42 40 52 Z', fill: '#7C2D12' }),
+      el('path', { d: 'M38 100 Q38 66 60 66 Q82 66 82 100 Z', fill: C.purple }),
+    ]),
+    baby: () => svgWrap([
+      el('circle', { cx: 60, cy: 62, r: 26, fill: C.tan }),
+      el('path', { d: 'M38 56 Q60 34 82 56', fill: 'none', stroke: '#7C2D12', 'stroke-width': 6, 'stroke-linecap': 'round' }),
+      el('circle', { cx: 50, cy: 62, r: 3, fill: C.black }),
+      el('circle', { cx: 70, cy: 62, r: 3, fill: C.black }),
+      el('path', { d: 'M52 72 Q60 78 68 72', stroke: C.black, 'stroke-width': 2.5, fill: 'none' }),
+      el('rect', { x: 44, y: 88, width: 32, height: 18, rx: 9, fill: C.sky }),
+    ]),
+    cousin: () => svgWrap([
+      el('circle', { cx: 46, cy: 46, r: 14, fill: C.tan }),
+      el('path', { d: 'M32 88 Q32 62 46 62 Q60 62 60 88 Z', fill: C.green }),
+      el('circle', { cx: 78, cy: 46, r: 14, fill: C.tan }),
+      el('path', { d: 'M64 88 Q64 62 78 62 Q92 62 92 88 Z', fill: C.coral }),
     ]),
   };
 

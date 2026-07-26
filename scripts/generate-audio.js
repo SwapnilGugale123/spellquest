@@ -41,12 +41,29 @@ const MODEL_ID = 'eleven_multilingual_v2';
 
 const OUT_DIR = path.join(__dirname, '..', 'assets', 'words');
 
-// Keep this in sync with the seed word list in js/app.js (Model.seed()).
+// Keep this in sync with the seed word list in js/app.js (Model.seed() +
+// seedContentLibrary()) — every distinct repository word, deduplicated
+// (the same word can be placed in multiple units but only needs one MP3).
 const WORDS = [
   'cat', 'dog', 'sun', 'red', 'box', 'egg', 'ball', 'fish', 'milk', 'star', 'rain', 'tree',
   'ring', 'pink', 'gift', 'corn', 'long', 'pond', 'circle', 'fifteen', 'eighteen', 'twenty', 'nose', 'tongue',
   'blue', 'green', 'white', 'thirty', 'oval', 'curd', 'drum', 'girl', 'pune', 'black', 'bulb', 'under',
   'apple', 'river', 'bridge', 'inside', 'outside', 'car', 'van', 'bike', 'cycle', 'bird', 'garden', 'cloud',
+  // numbers 11-40
+  'eleven', 'twelve', 'thirteen', 'fourteen', 'sixteen', 'seventeen', 'nineteen', 'forty',
+  // colors
+  'orange', 'purple', 'brown', 'grey', 'gold',
+  // home objects
+  'door', 'window', 'table', 'chair', 'bed', 'lamp', 'clock', 'mirror', 'key', 'roof',
+  'wall', 'floor', 'stairs', 'kitchen', 'sofa', 'pillow', 'blanket', 'spoon', 'plate', 'cup',
+  // animals
+  'lion', 'tiger', 'elephant', 'bear', 'monkey', 'horse', 'cow', 'sheep', 'goat', 'rabbit',
+  'duck', 'hen', 'frog', 'snake', 'deer',
+  // school objects
+  'pencil', 'pen', 'book', 'bag', 'eraser', 'ruler', 'chalk', 'board', 'desk', 'bench',
+  'crayon', 'scissors', 'glue', 'notebook', 'sharpener', 'paint', 'brush', 'uniform', 'lunch', 'bus',
+  // family members
+  'sister', 'brother', 'grandmother', 'grandfather', 'uncle', 'aunt', 'baby', 'cousin',
 ];
 
 // 0.85 = confirmed good pace for a young child hearing a word for the

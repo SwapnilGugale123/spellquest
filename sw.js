@@ -1,7 +1,7 @@
 // sw.js — offline cache for standalone/installed use (PWA).
 // Bump CACHE_VERSION whenever any cached file changes so installed devices
 // pick up the update instead of serving a stale copy forever.
-const CACHE_VERSION = 'spellquest-v3';
+const CACHE_VERSION = 'spellquest-v4';
 const PRECACHE = [
   './',
   'index.html',

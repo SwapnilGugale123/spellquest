@@ -41,6 +41,7 @@
       this.data = {
         units: DB.all('SELECT * FROM units'),
         words: DB.all('SELECT * FROM words'),
+        unit_words: DB.all('SELECT * FROM unit_words'),
         vehicles: DB.all('SELECT * FROM vehicles'),
         level_progress: DB.all('SELECT * FROM level_progress'),
         word_stats: DB.all('SELECT * FROM word_stats'),
@@ -55,17 +56,12 @@
         else if (v !== '' && !isNaN(v)) v = +v;
         this.data.settings[r.key] = v;
       });
-      const maxId = Math.max(1000, ...['units', 'words', 'vehicles', 'level_progress', 'word_stats', 'test_log', 'rewards']
+      const maxId = Math.max(1000, ...['units', 'words', 'unit_words', 'vehicles', 'level_progress', 'word_stats', 'test_log', 'rewards']
         .flatMap(t => this.data[t].map(r => r.id || 0)));
       this._idCounter = maxId;
     },
 
     seed() {
-      const words = (unit, list, start) => list.map((t, i) => ({
-        id: start + i, unit_id: unit, text: t.toLowerCase(),
-        image_path: 'assets/words/' + t.toLowerCase() + '.png',
-        audio_path: 'assets/words/' + t.toLowerCase() + '.mp3', order_index: i,
-      }));
       // D.5: child already knows ~30-40 words (~2-3 units). Seed Units 1-2 as
       // pre-completed/optional, Unit 3 as the current unit (parent will refine).
       this.data = {
@@ -77,12 +73,7 @@
           { id: 4, name: 'Unit 4', order_index: 4, vehicle_id: 4, is_unlocked: 0 },
         ],
         vehicles: [1, 2, 3, 4].map(i => Rewards.vehicleForUnit(i, i)),
-        words: [
-          ...words(1, ['Cat', 'Dog', 'Sun', 'Red', 'Box', 'Egg', 'Ball', 'Fish', 'Milk', 'Star', 'Rain', 'Tree'], 101),
-          ...words(2, ['Ring', 'Pink', 'Gift', 'Corn', 'Long', 'Pond', 'Circle', 'Fifteen', 'Eighteen', 'Twenty', 'Nose', 'Tongue'], 201),
-          ...words(3, ['Blue', 'Green', 'White', 'Thirty', 'Oval', 'Curd', 'Drum', 'Girl', 'Pune', 'Black', 'Bulb', 'Under'], 301),
-          ...words(4, ['Apple', 'River', 'Bridge', 'Inside', 'Outside', 'Car', 'Van', 'Bike', 'Cycle', 'Bird', 'Garden', 'Cloud'], 401),
-        ],
+        words: [], unit_words: [],
         level_progress: [], word_stats: [], test_log: [],
         rewards: [
           { id: 1, unit_id: 1, parts_unlocked: 6, vehicle_complete: 1 },
@@ -92,19 +83,26 @@
         ],
       };
       this._wireUid();
+      const seedUnit = (unitId, list) => list.forEach(t => this.addWordToUnit(t, unitId));
+      seedUnit(1, ['Cat', 'Dog', 'Sun', 'Red', 'Box', 'Egg', 'Ball', 'Fish', 'Milk', 'Star', 'Rain', 'Tree']);
+      seedUnit(2, ['Ring', 'Pink', 'Gift', 'Corn', 'Long', 'Pond', 'Circle', 'Fifteen', 'Eighteen', 'Twenty', 'Nose', 'Tongue']);
+      seedUnit(3, ['Blue', 'Green', 'White', 'Thirty', 'Oval', 'Curd', 'Drum', 'Girl', 'Pune', 'Black', 'Bulb', 'Under']);
+      seedUnit(4, ['Apple', 'River', 'Bridge', 'Inside', 'Outside', 'Car', 'Van', 'Bike', 'Cycle', 'Bird', 'Garden', 'Cloud']);
+      seedContentLibrary(this);
       [1, 2].forEach(u => { for (let l = 1; l <= 6; l++) this.data.level_progress.push({ id: this._uid(), unit_id: u, level: l, status: 'complete', tests_completed: 5 }); });
     },
 
     async persist() {
       const m = this.data;
-      DB.run('DELETE FROM units'); DB.run('DELETE FROM words'); DB.run('DELETE FROM vehicles');
+      DB.run('DELETE FROM units'); DB.run('DELETE FROM words'); DB.run('DELETE FROM unit_words'); DB.run('DELETE FROM vehicles');
       DB.run('DELETE FROM level_progress'); DB.run('DELETE FROM word_stats'); DB.run('DELETE FROM test_log');
       DB.run('DELETE FROM rewards'); DB.run('DELETE FROM settings');
       m.units.forEach(u => DB.run('INSERT INTO units VALUES(?,?,?,?,?)', [u.id, u.name, u.order_index, u.vehicle_id, u.is_unlocked]));
-      m.words.forEach(w => DB.run('INSERT INTO words VALUES(?,?,?,?,?,?)', [w.id, w.unit_id, w.text, w.image_path, w.audio_path, w.order_index]));
+      m.words.forEach(w => DB.run('INSERT INTO words VALUES(?,?,?,?,?,?)', [w.id, w.text, w.image_path, w.audio_path, w.image_data || null, w.audio_data || null]));
+      m.unit_words.forEach(uw => DB.run('INSERT INTO unit_words VALUES(?,?,?,?)', [uw.id, uw.unit_id, uw.word_id, uw.order_index]));
       m.vehicles.forEach(v => DB.run('INSERT INTO vehicles VALUES(?,?,?,?,?,?)', [v.id, v.name, v.type, v.part_count, 'assets/vehicles/' + v.type, v.color]));
       m.level_progress.forEach(l => DB.run('INSERT INTO level_progress VALUES(?,?,?,?,?)', [l.id, l.unit_id, l.level, l.status, l.tests_completed]));
-      m.word_stats.forEach(s => DB.run('INSERT INTO word_stats VALUES(?,?,?,?,?,?,?)', [s.id, s.word_id, s.level, s.times_shown, s.times_correct, s.times_incorrect, s.mastered_for_level]));
+      m.word_stats.forEach(s => DB.run('INSERT INTO word_stats VALUES(?,?,?,?,?,?,?)', [s.id, s.unit_word_id, s.level, s.times_shown, s.times_correct, s.times_incorrect, s.mastered_for_level]));
       m.test_log.forEach(t => DB.run('INSERT INTO test_log VALUES(?,?,?,?,?,?)', [t.id, t.unit_id, t.level, t.score_pct, t.words_json, t.timestamp]));
       m.rewards.forEach(r => DB.run('INSERT INTO rewards VALUES(?,?,?,?)', [r.id, r.unit_id, r.parts_unlocked, r.vehicle_complete]));
       Object.entries(m.settings).forEach(([k, v]) => DB.run('INSERT INTO settings VALUES(?,?)', [k, typeof v === 'object' ? JSON.stringify(v) : String(v)]));
@@ -113,8 +111,15 @@
     },
 
     unit(id) { return this.data.units.find(u => u.id === id); },
+    // A "placement" is a word-in-a-unit row joined with its repository
+    // text/image/audio — see engine.js header comment. `.id` on a placement
+    // is the unit_word_id, which is what stats/board-building key against.
     wordsOf(unitId) { return Engine.wordsOf(this.data, unitId); },
-    wordById(id) { return this.data.words.find(w => w.id === id); },
+    placementById(unitWordId) {
+      const uw = this.data.unit_words.find(x => x.id === unitWordId);
+      return uw ? Engine.toPlacement(this.data, uw) : null;
+    },
+    repoWordById(wordId) { return Engine.wordById(this.data, wordId); },
     vehicleOf(unitId) { const u = this.unit(unitId); return this.data.vehicles.find(v => v.id === u.vehicle_id); },
     reward(unitId) { return Rewards.reward(this.data, unitId); },
     lp(unitId, level) {
@@ -122,7 +127,7 @@
       if (!r) { r = { id: this._uid(), unit_id: unitId, level, status: 'locked', tests_completed: 0 }; this.data.level_progress.push(r); }
       return r;
     },
-    stat(wordId, level) { return Engine.stat(this.data, wordId, level); },
+    stat(unitWordId, level) { return Engine.stat(this.data, unitWordId, level); },
 
     levelPlayable(unitId, level) { if (level === 1) return true; return this.lp(unitId, level - 1).status === 'complete'; },
     levelStatus(unitId, level) {
@@ -182,13 +187,89 @@
       const tmp = a.order_index; a.order_index = b.order_index; b.order_index = tmp;
     },
 
-    // Moves a word to a different unit. Per-word stats (word_stats) are
-    // keyed by word_id, not unit_id, so mastery/exposure progress on that
-    // word simply carries over to its new unit unchanged.
-    moveWordToUnit(wordId, targetUnitId) {
-      const w = this.wordById(wordId); if (!w) return;
-      w.unit_id = targetUnitId;
-      w.order_index = this.wordsOf(targetUnitId).length - 1;
+    /* ----- word repository ----- */
+
+    allWords() { return [...this.data.words].sort((a, b) => a.text.localeCompare(b.text)); },
+
+    // Every unit a repository word currently appears in, as {unit, placement} pairs.
+    placementsOfWord(wordId) {
+      return this.data.unit_words.filter(uw => uw.word_id === wordId)
+        .map(uw => ({ unit: this.unit(uw.unit_id), placement: Engine.toPlacement(this.data, uw) }))
+        .filter(x => x.unit);
+    },
+
+    findWordByText(text) {
+      text = (text || '').trim().toLowerCase();
+      return this.data.words.find(w => w.text === text);
+    },
+
+    // Adds a word to the repository if it doesn't already exist by text
+    // (case-insensitive) and returns the (possibly pre-existing) row —
+    // callers should use this rather than pushing to data.words directly,
+    // so the same word typed twice reuses one repository entry.
+    findOrCreateWord(text) {
+      text = (text || '').trim().toLowerCase(); if (!text) return null;
+      const existing = this.findWordByText(text);
+      if (existing) return existing;
+      const w = { id: this._uid(), text, image_path: 'assets/words/' + text + '.png',
+        audio_path: 'assets/words/' + text + '.mp3', image_data: null, audio_data: null };
+      this.data.words.push(w);
+      return w;
+    },
+
+    // Placing the same word_id into the same unit twice is a no-op (returns
+    // the existing placement) rather than creating a duplicate row.
+    assignWordToUnit(wordId, unitId) {
+      const already = this.data.unit_words.find(uw => uw.word_id === wordId && uw.unit_id === unitId);
+      if (already) return already;
+      const order_index = this.data.unit_words.filter(uw => uw.unit_id === unitId).length;
+      const uw = { id: this._uid(), unit_id: unitId, word_id: wordId, order_index };
+      this.data.unit_words.push(uw);
+      return uw;
+    },
+
+    // Convenience: repository-add-if-needed + assign to a unit in one call
+    // (used by seeding and the simple "Add word" box in Admin).
+    addWordToUnit(text, unitId) {
+      const w = this.findOrCreateWord(text);
+      if (!w) return null;
+      return this.assignWordToUnit(w.id, unitId);
+    },
+
+    // Removes one placement (this unit only) and its stats. The repository
+    // word itself, and any of its OTHER placements, are untouched.
+    unassignFromUnit(unitWordId) {
+      this.data.unit_words = this.data.unit_words.filter(uw => uw.id !== unitWordId);
+      this.data.word_stats = this.data.word_stats.filter(s => s.unit_word_id !== unitWordId);
+    },
+
+    // Deletes a repository word entirely, including every placement of it
+    // across every unit and all their stats. Use unassignFromUnit for "just
+    // remove it from this one unit".
+    deleteWordEverywhere(wordId) {
+      const placementIds = this.data.unit_words.filter(uw => uw.word_id === wordId).map(uw => uw.id);
+      this.data.unit_words = this.data.unit_words.filter(uw => uw.word_id !== wordId);
+      this.data.word_stats = this.data.word_stats.filter(s => !placementIds.includes(s.unit_word_id));
+      this.data.words = this.data.words.filter(w => w.id !== wordId);
+    },
+
+    setWordImageOverride(wordId, dataUrl) {
+      const w = this.repoWordById(wordId); if (!w) return;
+      w.image_data = dataUrl;
+    },
+    clearWordImageOverride(wordId) {
+      const w = this.repoWordById(wordId); if (!w) return;
+      w.image_data = null;
+    },
+
+    // Moves a placement to a different unit (changes which unit this
+    // specific placement belongs to; the word stays exactly as placed in
+    // any other unit it's also in, if any). Stats for this placement carry
+    // over unchanged since they're keyed by unit_word_id, not by the unit.
+    movePlacementToUnit(unitWordId, targetUnitId) {
+      const uw = this.data.unit_words.find(x => x.id === unitWordId); if (!uw) return;
+      uw.unit_id = targetUnitId;
+      uw.order_index = this.data.unit_words.filter(x => x.unit_id === targetUnitId).length - 1;
     },
 
     // Splits a unit's words evenly across `count` new units inserted
@@ -196,9 +277,9 @@
     // units in sequence). The original unit keeps its first share and name;
     // new units are named "<original name> (2)", "(3)", etc.
     splitUnit(unitId, count) {
-      const words = this.wordsOf(unitId);
-      if (count < 2 || words.length < count) return [];
-      const perGroup = Math.ceil(words.length / count);
+      const placements = this.wordsOf(unitId);
+      if (count < 2 || placements.length < count) return [];
+      const perGroup = Math.ceil(placements.length / count);
       const original = this.unit(unitId);
       const created = [];
       let afterId = unitId;
@@ -207,12 +288,12 @@
         created.push(nu);
         afterId = nu.id;
       }
-      // Walk groups from the LAST group backward so each slice's words are
-      // moved out of the original before the next slice is computed —
+      // Walk groups from the LAST group backward so each slice's placements
+      // are moved out of the original before the next slice is computed —
       // otherwise wordsOf(unitId) shrinks out from under the indices.
       for (let g = count - 1; g >= 1; g--) {
-        const slice = words.slice(g * perGroup, (g + 1) * perGroup);
-        slice.forEach(w => this.moveWordToUnit(w.id, created[g - 1].id));
+        const slice = placements.slice(g * perGroup, (g + 1) * perGroup);
+        slice.forEach(p => this.movePlacementToUnit(p.id, created[g - 1].id));
       }
       return created;
     },
@@ -222,7 +303,7 @@
   const App = {
     state: { ready: false, screen: 'loading', unitId: null, level: null, session: null, board: null,
       testResult: null, muted: false, confetti: 0, encourage: null, lastSaved: null,
-      adminUnitId: null, busy: '', reveal: false, resumeAvail: null, paused: false, saveMode: 'memory' },
+      adminUnitId: null, busy: '', reveal: false, resumeAvail: null, paused: false, saveMode: 'memory', repoSearch: '' },
 
     async init() {
       await Model.load();
@@ -267,12 +348,12 @@
 
     loadWord() {
       const { session, level, unitId } = this.state;
-      const w = Model.wordById(session.words[session.idx]);
-      const board = Engine.buildBoard(Model.data, w, level);
+      const p = Model.placementById(session.words[session.idx]);
+      const board = Engine.buildBoard(Model.data, p, level);
       Model.data.settings.resume = { unitId, level, words: session.words, idx: session.idx, kind: session.kind };
       this.persist();
       this.setState({ board, reveal: false });
-      Audio2.speak(w.text);
+      Audio2.speak(p.text, p.audio_data);
     },
 
     resume() {
@@ -335,7 +416,7 @@
       if (correct) {
         // Hear the word once more while it's still on screen, then a short
         // beat, then move on — reinforces the spelling-to-sound link.
-        await Audio2.speak(b.word);
+        await Audio2.speak(b.word, b.audioData);
         setTimeout(() => { this.setState({ encourage: null }); this.advance(); }, 500);
       } else {
         setTimeout(() => { this.setState({ encourage: null }); this.advance(); }, 1500);
@@ -356,7 +437,7 @@
       const score = total ? correct / total : 0;
       Model.data.test_log.push({
         id: Model._uid(), unit_id: unitId, level, score_pct: +(score * 100).toFixed(0),
-        words_json: JSON.stringify(session.words.map((wid, i) => ({ word: Model.wordById(wid).text, correct: !!session.results[i] }))),
+        words_json: JSON.stringify(session.words.map((wid, i) => ({ word: Model.placementById(wid).text, correct: !!session.results[i] }))),
         timestamp: new Date().toISOString(),
       });
       Model.lp(unitId, level).tests_completed++;
@@ -416,19 +497,28 @@
     markUnitComplete(unitId) {
       for (let l = 1; l <= 6; l++) Model.lp(unitId, l).status = 'complete';
       Rewards.completeVehicle(Model.data, unitId);
-      Model.wordsOf(unitId).forEach(w => { for (let l = 1; l <= 6; l++) { const s = Model.stat(w.id, l); s.times_correct = Math.max(s.times_correct, 3); s.mastered_for_level = 1; } });
+      Model.wordsOf(unitId).forEach(p => { for (let l = 1; l <= 6; l++) { const s = Model.stat(p.id, l); s.times_correct = Math.max(s.times_correct, 3); s.mastered_for_level = 1; } });
       this.persist(); render();
     },
+    // Simple path used by the "Add word" box on a unit's page: repository
+    // add-if-new + assign to this unit, in one step.
     addWord(unitId, text) {
-      text = (text || '').trim(); if (!text) return;
-      const ord = Model.wordsOf(unitId).length;
-      Model.data.words.push({ id: Model._uid(), unit_id: unitId, text: text.toLowerCase(),
-        image_path: 'assets/words/' + text.toLowerCase() + '.png', audio_path: 'assets/words/' + text.toLowerCase() + '.mp3', order_index: ord });
+      const uw = Model.addWordToUnit(text, unitId);
+      if (!uw) return;
       this.persist(); render();
     },
-    removeWord(id) {
-      Model.data.words = Model.data.words.filter(w => w.id !== id);
-      Model.data.word_stats = Model.data.word_stats.filter(s => s.word_id !== id);
+    // Removes this word from just this one unit (its other placements, if
+    // any, and the repository entry itself, are untouched).
+    removeWordPlacement(unitWordId) {
+      Model.unassignFromUnit(unitWordId);
+      this.persist(); render();
+    },
+    // Deletes a repository word everywhere (every unit it's placed in).
+    deleteWordEverywhere(wordId) {
+      const placements = Model.placementsOfWord(wordId);
+      const where = placements.map(p => p.unit.name).join(', ') || 'nowhere yet';
+      if (!confirm(`Delete "${Model.repoWordById(wordId).text}" completely? It's placed in: ${where}. This removes it and its progress from ALL of those units.`)) return;
+      Model.deleteWordEverywhere(wordId);
       this.persist(); render();
     },
     addUnit(name, afterUnitId) {
@@ -449,14 +539,29 @@
       Model.reorderUnit(unitId, direction);
       this.persist(); render();
     },
-    moveWordToUnit(wordId, targetUnitId) {
-      Model.moveWordToUnit(wordId, targetUnitId);
+    // Moves one placement (this unit's copy of the word) to another unit.
+    movePlacementToUnit(unitWordId, targetUnitId) {
+      Model.movePlacementToUnit(unitWordId, targetUnitId);
+      this.persist(); render();
+    },
+    // Repository: add this word to ANOTHER unit too, without removing it
+    // from any unit it's already in (the "same item in multiple units" case).
+    assignWordToUnit(wordId, unitId) {
+      Model.assignWordToUnit(wordId, unitId);
       this.persist(); render();
     },
     splitUnit(unitId, count) {
       const created = Model.splitUnit(unitId, count);
       if (!created.length) return;
       this.persist(); this.setState({ adminUnitId: unitId });
+    },
+    setWordImage(wordId, dataUrl) {
+      Model.setWordImageOverride(wordId, dataUrl);
+      this.persist(); render();
+    },
+    clearWordImage(wordId) {
+      Model.clearWordImageOverride(wordId);
+      this.persist(); render();
     },
     resetAll() {
       if (!confirm('Reset ALL progress and content back to the seed data?')) return;
@@ -466,6 +571,42 @@
   };
 
   function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
+
+  // Adds the numbers/colors/home/animals/school/family word bank as new
+  // units appended after whatever units already exist. Each `words` list
+  // entry becomes a repository word (reused if it already exists — e.g.
+  // "thirty" and "fifteen" already exist from the original seed, so these
+  // units demonstrate placing an existing repository word into another
+  // unit rather than creating a duplicate).
+  function seedContentLibrary(model) {
+    const groups = [
+      ['Numbers 11-15', ['eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen']],
+      ['Numbers 16-20', ['sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty']],
+      ['Numbers 30-40', ['thirty', 'forty']],
+      ['Colors A', ['red', 'blue', 'green', 'yellow', 'orange']],
+      ['Colors B', ['black', 'white', 'pink', 'purple', 'brown']],
+      ['Colors C', ['grey', 'gold']],
+      ['Home Objects A', ['door', 'window', 'table', 'chair', 'bed']],
+      ['Home Objects B', ['lamp', 'clock', 'mirror', 'key', 'roof']],
+      ['Home Objects C', ['wall', 'floor', 'stairs', 'kitchen', 'sofa']],
+      ['Home Objects D', ['pillow', 'blanket', 'spoon', 'plate', 'cup']],
+      ['Animals A', ['lion', 'tiger', 'elephant', 'bear', 'monkey']],
+      ['Animals B', ['horse', 'cow', 'sheep', 'goat', 'rabbit']],
+      ['Animals C', ['duck', 'hen', 'frog', 'snake', 'deer']],
+      ['School Objects A', ['pencil', 'pen', 'book', 'bag', 'eraser']],
+      ['School Objects B', ['ruler', 'chalk', 'board', 'desk', 'bench']],
+      ['School Objects C', ['crayon', 'scissors', 'glue', 'notebook', 'sharpener']],
+      ['School Objects D', ['paint', 'brush', 'uniform', 'lunch', 'bus']],
+      ['Family A', ['mother', 'father', 'sister', 'brother', 'baby']],
+      ['Family B', ['grandmother', 'grandfather', 'uncle', 'aunt', 'cousin']],
+    ];
+    let afterId = model.orderedUnits().slice(-1)[0]?.id ?? null;
+    groups.forEach(([name, words]) => {
+      const unit = model.insertUnitAfter(afterId, name);
+      words.forEach(t => model.addWordToUnit(t, unit.id));
+      afterId = unit.id;
+    });
+  }
 
   /* ---------- Icons ---------- */
   const NS = 'http://www.w3.org/2000/svg';
@@ -523,13 +664,14 @@
   function screenBackBtn(onClick) {
     return E('button', { class: 'icon-btn', style: { position: 'absolute', top: '16px', left: '16px', zIndex: 5 }, onclick: onClick }, [icon('back', { size: 22 })]);
   }
-  function replayBtn(text) {
-    return E('button', { class: 'replay-btn', onclick: () => Audio2.speak(text) }, [icon('sound', { size: 22, color: 'var(--blue)' }), 'Hear it']);
+  function replayBtn(text, audioData) {
+    return E('button', { class: 'replay-btn', onclick: () => Audio2.speak(text, audioData) }, [icon('sound', { size: 22, color: 'var(--blue)' }), 'Hear it']);
   }
-  function imageBox(word, size) {
+  function imageBox(word, size, imageData) {
     size = size || 140;
     const box = E('div', { class: 'image-box', style: { width: size + 'px', height: size + 'px' } });
-    box.appendChild(Illustrations.render(word));
+    if (imageData) box.appendChild(E('img', { src: imageData, style: { width: '100%', height: '100%', objectFit: 'contain', borderRadius: '18px' } }));
+    else box.appendChild(Illustrations.render(word));
     return box;
   }
   function vehicleBox(type, parts, color, opt) {
@@ -677,9 +819,9 @@
       E('div', { class: 'game-word-count' }, ['Word ' + (s.idx + 1) + ' of ' + s.words.length + ' · Level ' + App.state.level]),
       E('div', { class: 'stimulus' }, [
         showWord ? E('div', { class: 'stimulus-word baloo' }, [b.word]) : null,
-        b.image ? imageBox(b.word, 130) : null,
+        b.image ? imageBox(b.word, 130, b.imageData) : null,
         E('div', { style: { display: 'flex', gap: '10px', alignItems: 'center' } }, [
-          replayBtn(b.word),
+          replayBtn(b.word, b.audioData),
           App.state.level >= 5 ? E('div', { style: { fontSize: '12px', fontWeight: 700, color: 'var(--muted)', fontFamily: 'monospace' } }, [App.state.level === 6 ? 'SOUND ONLY' : 'NO PICTURE']) : null,
         ]),
       ]),
@@ -843,6 +985,110 @@
     ]);
   }
 
+  function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // One row for a word placement (this unit's copy of a repository word):
+  // thumbnail + upload/clear image override, audio preview, "also in N
+  // other units" note, move-to-unit picker, add-to-another-unit picker,
+  // and remove-from-this-unit only (repository entry survives).
+  function wordPlacementRow(p, currentUnitId, otherUnitsFn) {
+    const w = Model.repoWordById(p.word_id);
+    const placements = Model.placementsOfWord(p.word_id);
+    const otherPlacementUnits = placements.filter(x => x.unit.id !== currentUnitId).map(x => x.unit.name);
+    const thumb = E('div', { style: { width: '32px', height: '32px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0, background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center' } },
+      [w.image_data ? E('img', { src: w.image_data, style: { width: '100%', height: '100%', objectFit: 'cover' } }) : Illustrations.render(w.text)]);
+
+    const otherUnits = otherUnitsFn();
+    const assignSelect = E('select', { class: 'admin-input', style: { flex: '0 0 auto', width: 'auto', padding: '6px 8px', fontSize: '12px' } }, [
+      E('option', { value: '' }, ['+ Also add to…']),
+      ...otherUnits.filter(u => !placements.some(x => x.unit.id === u.id)).map(u => E('option', { value: String(u.id) }, [u.name])),
+    ]);
+
+    return E('div', { class: 'admin-row', style: { flexWrap: 'wrap', gap: '6px' } }, [
+      thumb,
+      E('div', { style: { flex: 1, minWidth: '90px' } }, [
+        E('div', { style: { fontSize: '14px', fontWeight: 600 } }, [w.text]),
+        otherPlacementUnits.length ? E('div', { style: { fontSize: '11px', color: 'var(--muted)' } }, ['also in: ' + otherPlacementUnits.join(', ')]) : null,
+      ]),
+      E('button', { class: 'pill-btn', style: { background: '#F1F5F9' }, onclick: () => Audio2.speak(w.text, w.audio_data) }, ['▶']),
+      E('label', { class: 'pill-btn', style: { background: '#F1F5F9', cursor: 'pointer' } }, [
+        'Image',
+        E('input', { type: 'file', accept: 'image/*', style: { display: 'none' },
+          onchange: async e => {
+            const file = e.target.files[0]; if (!file) return;
+            const dataUrl = await fileToDataUrl(file);
+            App.setWordImage(w.id, dataUrl);
+          } }),
+      ]),
+      w.image_data ? E('button', { class: 'pill-btn', style: { background: '#FFF7ED', color: 'var(--amber-dk)' }, onclick: () => App.clearWordImage(w.id) }, ['Reset img']) : null,
+      E('select', { class: 'admin-input', style: { flex: '0 0 auto', width: 'auto', padding: '6px 8px', fontSize: '12px' },
+        onchange: e => { const target = +e.target.value; if (target) App.movePlacementToUnit(p.id, target); e.target.value = ''; } }, [
+        E('option', { value: '' }, ['Move to…']),
+        ...otherUnits.map(u => E('option', { value: String(u.id) }, [u.name])),
+      ]),
+      assignSelect,
+      E('button', { class: 'pill-btn', style: { background: '#EEF2FF', color: 'var(--blue-dk)' }, onclick: () => { const v = +assignSelect.value; if (v) App.assignWordToUnit(w.id, v); } }, ['Add']),
+      E('button', { class: 'pill-btn', style: { background: '#FEF2F2', color: 'var(--coral)', fontWeight: 700 }, onclick: () => App.removeWordPlacement(p.id) }, ['✕ this unit']),
+    ]);
+  }
+
+  // Browse/search every word in the repository regardless of which unit
+  // (if any) it's assigned to, with quick "assign to a unit" and image
+  // upload right there — this is the "one item added to multiple units"
+  // and "fix a specific picture" surface.
+  function wordRepositorySection(au) {
+    const query = App.state.repoSearch.trim().toLowerCase();
+    const all = Model.allWords();
+    const filtered = query ? all.filter(w => w.text.includes(query)) : all;
+    const searchInput = E('input', { class: 'admin-input', placeholder: 'Search the word repository…', value: App.state.repoSearch,
+      oninput: e => App.setState({ repoSearch: e.target.value }) });
+
+    const rows = filtered.slice(0, 60).map(w => {
+      const placements = Model.placementsOfWord(w.id);
+      const inUnitNames = placements.map(p => p.unit.name);
+      const assignSelect = E('select', { class: 'admin-input', style: { flex: '0 0 auto', width: 'auto', padding: '6px 8px', fontSize: '12px' } }, [
+        E('option', { value: '' }, ['Assign to…']),
+        ...Model.orderedUnits().filter(u => !placements.some(p => p.unit.id === u.id)).map(u => E('option', { value: String(u.id) }, [u.name])),
+      ]);
+      const thumb = E('div', { style: { width: '32px', height: '32px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0, background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center' } },
+        [w.image_data ? E('img', { src: w.image_data, style: { width: '100%', height: '100%', objectFit: 'cover' } }) : Illustrations.render(w.text)]);
+      return E('div', { class: 'admin-row', style: { flexWrap: 'wrap', gap: '6px' } }, [
+        thumb,
+        E('div', { style: { flex: 1, minWidth: '90px' } }, [
+          E('div', { style: { fontSize: '14px', fontWeight: 600 } }, [w.text]),
+          E('div', { style: { fontSize: '11px', color: 'var(--muted)' } }, [inUnitNames.length ? 'in: ' + inUnitNames.join(', ') : 'not placed in any unit yet']),
+        ]),
+        E('button', { class: 'pill-btn', style: { background: '#F1F5F9' }, onclick: () => Audio2.speak(w.text, w.audio_data) }, ['▶']),
+        E('label', { class: 'pill-btn', style: { background: '#F1F5F9', cursor: 'pointer' } }, [
+          'Image',
+          E('input', { type: 'file', accept: 'image/*', style: { display: 'none' },
+            onchange: async e => { const file = e.target.files[0]; if (!file) return; App.setWordImage(w.id, await fileToDataUrl(file)); } }),
+        ]),
+        w.image_data ? E('button', { class: 'pill-btn', style: { background: '#FFF7ED', color: 'var(--amber-dk)' }, onclick: () => App.clearWordImage(w.id) }, ['Reset img']) : null,
+        assignSelect,
+        E('button', { class: 'pill-btn', style: { background: '#EEF2FF', color: 'var(--blue-dk)' }, onclick: () => { const v = +assignSelect.value; if (v) App.assignWordToUnit(w.id, v); } }, ['Add']),
+        E('button', { class: 'pill-btn', style: { background: '#FEF2F2', color: 'var(--coral)', fontWeight: 700 }, onclick: () => App.deleteWordEverywhere(w.id) }, ['✕ everywhere']),
+      ]);
+    });
+
+    return E('div', {}, [
+      E('div', { class: 'admin-label' }, ['Word Repository (' + all.length + ' words)']),
+      E('div', { class: 'admin-note', style: { marginTop: 0, marginBottom: '8px' } }, [
+        'Every word lives here once, even if it appears in several units — search, fix a picture, or assign it to another unit without retyping it. Removing a word from a single unit (✕ this unit, above) keeps it here; "✕ everywhere" deletes it and all its placements for good.',
+      ]),
+      searchInput,
+      E('div', { class: 'admin-list', style: { marginTop: '8px', maxHeight: '340px', overflowY: 'auto' } }, rows.length ? rows : [E('div', { style: { padding: '12px', color: 'var(--muted)', fontSize: '14px' } }, ['No matches.'])]),
+      filtered.length > 60 ? E('div', { class: 'admin-note' }, [filtered.length - 60 + ' more — narrow your search to see them.']) : null,
+    ]);
+  }
+
   function viewAdmin() {
     const au = App.state.adminUnitId || Model.data.units[0].id;
     const orderedUnits = Model.orderedUnits();
@@ -867,16 +1113,7 @@
     });
     let newWordVal = '', newUnitVal = '';
     const otherUnits = () => Model.orderedUnits().filter(u => u.id !== au);
-    const words = Model.wordsOf(au).map(w => E('div', { class: 'admin-row' }, [
-      E('div', { style: { flex: 1, fontSize: '14px', fontWeight: 600 } }, [w.text]),
-      E('button', { class: 'pill-btn', style: { background: '#F1F5F9' }, onclick: () => Audio2.speak(w.text) }, ['▶ audio']),
-      E('select', { class: 'admin-input', style: { flex: '0 0 auto', width: 'auto', padding: '6px 8px', fontSize: '12px' },
-        onchange: e => { const target = +e.target.value; if (target) App.moveWordToUnit(w.id, target); e.target.value = ''; } }, [
-        E('option', { value: '' }, ['Move to…']),
-        ...otherUnits().map(u => E('option', { value: String(u.id) }, [u.name])),
-      ]),
-      E('button', { class: 'pill-btn', style: { background: '#FEF2F2', color: 'var(--coral)', fontWeight: 700 }, onclick: () => App.removeWord(w.id) }, ['✕']),
-    ]));
+    const words = Model.wordsOf(au).map(p => wordPlacementRow(p, au, otherUnits));
     const label = t => E('div', { class: 'admin-label' }, [t]);
 
     const newWordInput = E('input', { class: 'admin-input', placeholder: 'Add a word (e.g. bridge)',
@@ -904,7 +1141,9 @@
           newWordInput,
           E('button', { class: 'admin-btn', style: { background: 'var(--green)', color: '#fff' }, onclick: () => App.addWord(au, newWordInput.value) }, ['Add word']),
         ]),
-        E('div', { class: 'admin-note' }, ['Images: hand-drawn SVGs are built in for common words; unknown words fall back to a labeled tile until you drop a matching PNG in assets/words/. Audio: uses the best available system voice, or a real MP3 at assets/words/<word>.mp3 if present.']),
+        E('div', { class: 'admin-note' }, ['Adding a word here reuses it from the repository below if it already exists, or creates it. Use the repository to add the same word to more than one unit, or fix a picture.']),
+
+        wordRepositorySection(au),
 
         label('Move progress to another device (OneDrive sync)'),
         E('div', { class: 'admin-note', style: { marginTop: 0, marginBottom: '8px' } }, [

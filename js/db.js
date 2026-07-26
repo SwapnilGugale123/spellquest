@@ -9,12 +9,23 @@ const DB = (() => {
       vehicle_id INTEGER,
       is_unlocked INTEGER DEFAULT 0
     );
+    -- Word repository: one row per distinct word, independent of any unit.
+    -- image_data/audio_data hold an admin-uploaded override (data: URL) that
+    -- takes precedence over the built-in illustration / assets/words/ file.
     CREATE TABLE IF NOT EXISTS words (
       id INTEGER PRIMARY KEY,
-      unit_id INTEGER,
       text TEXT,
       image_path TEXT,
       audio_path TEXT,
+      image_data TEXT,
+      audio_data TEXT
+    );
+    -- Placement of a repository word into a unit. The same word_id can
+    -- appear in multiple units (multiple rows), each tracked separately.
+    CREATE TABLE IF NOT EXISTS unit_words (
+      id INTEGER PRIMARY KEY,
+      unit_id INTEGER,
+      word_id INTEGER,
       order_index INTEGER
     );
     CREATE TABLE IF NOT EXISTS vehicles (
@@ -32,9 +43,11 @@ const DB = (() => {
       status TEXT,
       tests_completed INTEGER DEFAULT 0
     );
+    -- Keyed by unit_word_id (a specific placement), not word_id, so the
+    -- same repository word placed in two units tracks mastery separately.
     CREATE TABLE IF NOT EXISTS word_stats (
       id INTEGER PRIMARY KEY,
-      word_id INTEGER,
+      unit_word_id INTEGER,
       level INTEGER,
       times_shown INTEGER DEFAULT 0,
       times_correct INTEGER DEFAULT 0,
@@ -124,6 +137,53 @@ const DB = (() => {
     } catch (e) { return null; }
   }
 
+  // CREATE TABLE IF NOT EXISTS leaves an already-existing old-shape `words`
+  // table untouched, so a device that installed before the word-repository
+  // change still has the old columns (unit_id on words, word_id on
+  // word_stats) and no unit_words table at all. Detect that shape and
+  // migrate it forward once; safe to call on a fresh/already-migrated DB
+  // too (no-ops immediately).
+  function migrateToWordRepository() {
+    const cols = all("PRAGMA table_info(words)").map(c => c.name);
+    const isOldShape = cols.includes('unit_id');
+    if (!isOldShape) return;
+
+    run(`CREATE TABLE IF NOT EXISTS unit_words (
+      id INTEGER PRIMARY KEY, unit_id INTEGER, word_id INTEGER, order_index INTEGER
+    )`);
+    run(`CREATE TABLE words_new (
+      id INTEGER PRIMARY KEY, text TEXT, image_path TEXT, audio_path TEXT, image_data TEXT, audio_data TEXT
+    )`);
+    const oldWords = all('SELECT * FROM words');
+    oldWords.forEach(w => {
+      run('INSERT INTO words_new (id, text, image_path, audio_path, image_data, audio_data) VALUES (?,?,?,?,?,?)',
+        [w.id, w.text, w.image_path, w.audio_path, null, null]);
+      run('INSERT INTO unit_words (id, unit_id, word_id, order_index) VALUES (?,?,?,?)',
+        [w.id, w.unit_id, w.id, w.order_index]);
+    });
+    run('DROP TABLE words');
+    run('ALTER TABLE words_new RENAME TO words');
+
+    const statCols = all("PRAGMA table_info(word_stats)").map(c => c.name);
+    if (statCols.includes('word_id')) {
+      run(`CREATE TABLE word_stats_new (
+        id INTEGER PRIMARY KEY, unit_word_id INTEGER, level INTEGER,
+        times_shown INTEGER DEFAULT 0, times_correct INTEGER DEFAULT 0,
+        times_incorrect INTEGER DEFAULT 0, mastered_for_level INTEGER DEFAULT 0
+      )`);
+      // Old word_stats had no unit context; unit_words.id was set equal to
+      // the original word's id above, so word_id doubles as the matching
+      // unit_word_id for that word's single (pre-migration) placement.
+      const oldStats = all('SELECT * FROM word_stats');
+      oldStats.forEach(s => {
+        run('INSERT INTO word_stats_new (id, unit_word_id, level, times_shown, times_correct, times_incorrect, mastered_for_level) VALUES (?,?,?,?,?,?,?)',
+          [s.id, s.word_id, s.level, s.times_shown, s.times_correct, s.times_incorrect, s.mastered_for_level]);
+      });
+      run('DROP TABLE word_stats');
+      run('ALTER TABLE word_stats_new RENAME TO word_stats');
+    }
+  }
+
   // Precedence: this device's IndexedDB save (most likely up to date for
   // ongoing play) > a spellquest.sqlite already sitting next to index.html
   // (e.g. right after a fresh install/first run) > brand new empty DB.
@@ -133,6 +193,7 @@ const DB = (() => {
     const bytes = local || await fetchExistingBytes();
     db = bytes ? new SQL.Database(bytes) : new SQL.Database();
     db.run(SCHEMA);
+    migrateToWordRepository();
     return db;
   }
 
